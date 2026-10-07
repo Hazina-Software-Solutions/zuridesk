@@ -16,7 +16,10 @@ customer data, or a production deployment.
 - `packages/api-client` — typed HTTP client generated from OpenAPI
 - `packages/ui` — platform-neutral design tokens
 
-See [local development](docs/setup/local-development.md), [Atlas and hosting](docs/setup/atlas-and-hosting.md), and the [Phase 1 security baseline](docs/security/phase-1-baseline.md).
+See the [implementation checklist](docs/implementation-checklist.md),
+[local development](docs/setup/local-development.md),
+[Atlas and hosting](docs/setup/atlas-and-hosting.md), and the
+[Phase 1 security baseline](docs/security/phase-1-baseline.md).
 
 ## Commands
 
