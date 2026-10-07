@@ -350,10 +350,16 @@ importers:
 
   packages/db:
     dependencies:
+      '@zuridesk/shared':
+        specifier: workspace:*
+        version: link:../shared
       mongoose:
         specifier: 9.10.4
         version: 9.10.4
     devDependencies:
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
       typescript:
         specifier: 5.9.3
         version: 5.9.3

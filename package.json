@@ -9,6 +9,8 @@
   "packageManager": "pnpm@12.9.1",
   "scripts": {
     "build": "turbo run build",
+    "db:migrate": "pnpm --filter @zuridesk/db migrate",
+    "db:migration:status": "pnpm --filter @zuridesk/db migration:status",
     "dev": "turbo run dev --parallel",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

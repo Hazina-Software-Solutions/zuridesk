@@ -20,6 +20,7 @@
     "test:integration": {
       "dependsOn": ["^test:integration"],
       "cache": false,
+      "env": ["TEST_MONGODB_URI"],
       "outputs": []
     },
     "generate:openapi": {

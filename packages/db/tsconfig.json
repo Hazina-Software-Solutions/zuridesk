@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*.ts", "vitest.integration.config.ts"]
+  "include": ["scripts/**/*.ts", "src/**/*.ts", "vitest.integration.config.ts"]
 }
