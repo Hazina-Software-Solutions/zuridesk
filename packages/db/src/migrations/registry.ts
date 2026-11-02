@@ -1,4 +1,6 @@
 import type { Migration } from "./types";
+import { createTenantIdentityCollectionsMigration } from "./0001-create-tenant-identity-collections";
 
-// Business-schema migrations are added here by subsequent Phase 2 changes.
-export const migrations = [] as const satisfies readonly Migration[];
+export const migrations = [
+  createTenantIdentityCollectionsMigration
+] as const satisfies readonly Migration[];

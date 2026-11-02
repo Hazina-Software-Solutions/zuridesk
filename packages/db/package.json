@@ -10,6 +10,7 @@
     "build": "tsc --noEmit",
     "migrate": "node ../../scripts/run-with-root-env.mjs tsx scripts/migrate.ts",
     "migration:status": "node ../../scripts/run-with-root-env.mjs tsx scripts/migration-status.ts",
+    "seed": "node ../../scripts/run-with-root-env.mjs tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --exclude '**/*.integration.test.ts'",
     "test:integration": "vitest run --config vitest.integration.config.ts"

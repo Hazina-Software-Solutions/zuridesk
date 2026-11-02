@@ -5,13 +5,17 @@ import {
   IndexPolicyError,
   type ApplicationIndexDefinition
 } from "./index-policy";
+import { applicationIndexManifest } from "./index-manifest";
 
 describe("index policy", () => {
+  it("accepts the complete application manifest and its ownership classifications", () => {
+    expect(() => assertValidIndexManifest(applicationIndexManifest)).not.toThrow();
+  });
   it("accepts tenant-first query and unique indexes", () => {
     expect(() =>
       assertValidIndexManifest([
         {
-          collection: "customers",
+          collection: "locations",
           name: "tenant_phone_lookup",
           tenantOwned: true,
           kind: "query",
@@ -38,7 +42,7 @@ describe("index policy", () => {
     expect(() =>
       assertValidIndexManifest([
         {
-          collection: "bookings",
+          collection: "locations",
           name: "staff_time",
           tenantOwned: true,
           kind: "query",
@@ -84,7 +88,7 @@ describe("index policy", () => {
     expect(() =>
       assertValidIndexManifest([
         {
-          collection: "customers",
+          collection: "locations",
           name: "_id_",
           tenantOwned: true,
           kind: "system",
@@ -97,7 +101,7 @@ describe("index policy", () => {
     expect(() =>
       assertValidIndexManifest([
         {
-          collection: "customers",
+          collection: "locations",
           name: "unapproved_system_index",
           tenantOwned: true,
           kind: "system",

@@ -19,9 +19,11 @@ database records whose definitions have disappeared from the registry.
 6. Add a rollback note. Rollback is normally a new forward migration; never
    edit or delete an applied migration.
 
-Migration checksums include the ID, name, and migration function. Migration
-commands therefore run the pinned TypeScript source through the workspace's
-pinned `tsx` version rather than through an independently transformed copy.
+Migration checksums include the ID, name, migration-owned immutable document-shape/index
+material, and migration function. Migration commands therefore run the pinned
+TypeScript source through the workspace's pinned `tsx` version rather than
+through an independently transformed copy. A closed-over schema or index change
+must change the checksum material and will be rejected after application.
 
 ## Commands
 
@@ -35,6 +37,9 @@ pnpm db:migrate
 
 Both commands avoid printing connection strings. Status initializes only the
 migration tracking collection and its unique index if they do not exist.
+
+Phase 2.2 operational details, seed safety, and compatibility guidance are in
+[Phase 2.2 tenant identity and locations](phase-2.2-tenant-identity.md).
 
 ## Deployment and recovery
 

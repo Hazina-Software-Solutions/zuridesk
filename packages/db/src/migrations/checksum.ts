@@ -8,6 +8,8 @@ export function checksumMigration(migration: Migration): string {
     .update("\0")
     .update(migration.name)
     .update("\0")
+    .update(migration.checksumMaterial)
+    .update("\0")
     .update(migration.up.toString())
     .digest("hex");
 }

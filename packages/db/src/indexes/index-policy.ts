@@ -1,3 +1,5 @@
+import { collectionOwnership, isOwnedCollectionName } from "./collection-ownership";
+
 export type IndexDirection = 1 | -1 | "text";
 export type IndexKey = readonly [field: string, direction: IndexDirection];
 export type IndexKind = "query" | "unique" | "ttl" | "system";
@@ -96,6 +98,17 @@ export function assertValidIndexManifest(indexes: readonly ApplicationIndexDefin
       violations.push(`${index.collection}.${index.name}: duplicate index name in collection`);
     }
     names.add(identity);
+
+    if (!isOwnedCollectionName(index.collection)) {
+      violations.push(`${index.collection}.${index.name}: collection ownership is not classified`);
+    } else {
+      const expectedTenantOwned = collectionOwnership[index.collection] === "tenant";
+      if (index.tenantOwned !== expectedTenantOwned) {
+        violations.push(
+          `${index.collection}.${index.name}: tenantOwned does not match the collection ownership manifest`
+        );
+      }
+    }
   }
 
   if (violations.length > 0) {

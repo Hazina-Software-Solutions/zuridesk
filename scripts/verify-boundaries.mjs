@@ -15,6 +15,12 @@ const ignoredDirectories = new Set([
   "node_modules"
 ]);
 const databasePackageRoot = resolve(repositoryRoot, "packages/db");
+const databaseModelsRoot = resolve(databasePackageRoot, "src/models");
+const permittedModelConsumerRoots = [
+  databaseModelsRoot,
+  resolve(databasePackageRoot, "src/repositories"),
+  resolve(databasePackageRoot, "src/seeds")
+];
 const sharedPackageRoot = resolve(repositoryRoot, "packages/shared");
 const apiClientOnlyApps = [
   resolve(repositoryRoot, "apps/web"),
@@ -132,8 +138,43 @@ for (const sourceRoot of sourceRoots) {
             `${relativeFile}: relative import '${specifier}' crosses from ${sourceUnit} into ${targetUnit}`
           );
         }
+
+        if (
+          isInside(importTarget, databaseModelsRoot) &&
+          !relativeFile.endsWith(".test.ts") &&
+          !relativeFile.endsWith(".integration.test.ts") &&
+          !permittedModelConsumerRoots.some((root) => isInside(file, root))
+        ) {
+          violations.push(
+            `${relativeFile}: raw database models may only be imported by database repositories, seeds, or tests`
+          );
+        }
       }
     }
+  }
+}
+
+const databasePublicEntry = await readFile(resolve(databasePackageRoot, "src/index.ts"), "utf8");
+for (const forbiddenPublicToken of [
+  "getDatabaseConnection",
+  "getInternalDatabase",
+  "createInternalTrustedTenantContext",
+  "createTrustedTenantContext",
+  "bootstrapTenantIdentity",
+  "userRepository",
+  "mongoose"
+]) {
+  if (databasePublicEntry.includes(forbiddenPublicToken)) {
+    violations.push(
+      `packages/db/src/index.ts: public database boundary contains forbidden token '${forbiddenPublicToken}'`
+    );
+  }
+}
+for (const forbiddenPublicType of ["Connection", "Model", "Query", "Session"]) {
+  if (new RegExp(`\\b${forbiddenPublicType}\\b`, "u").test(databasePublicEntry)) {
+    violations.push(
+      `packages/db/src/index.ts: public database boundary contains forbidden type '${forbiddenPublicType}'`
+    );
   }
 }
 

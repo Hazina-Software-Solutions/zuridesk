@@ -1,5 +1,5 @@
 import { assertValidIndexManifest } from "../indexes/index-policy";
-import { migrationIndexManifest } from "../indexes/index-manifest";
+import { applicationIndexManifest, migrationIndexManifest } from "../indexes/index-manifest";
 import { checksumMigration } from "./checksum";
 import type {
   AppliedMigrationRecord,
@@ -44,7 +44,7 @@ function validateRegistry(migrations: readonly Migration[]): void {
 }
 
 async function ensureMigrationStore(database: MigrationDatabase): Promise<void> {
-  assertValidIndexManifest(migrationIndexManifest);
+  assertValidIndexManifest(applicationIndexManifest);
 
   const index = migrationIndexManifest[0];
   await database

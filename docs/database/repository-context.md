@@ -6,23 +6,23 @@ authenticated user, active tenant, and request identifier. Phase 3 authenticatio
 middleware will create it only after verifying the user's active membership.
 
 ```ts
-const context = createTrustedTenantContext({
-  tenantId: verifiedMembership.tenantId,
-  userId: authenticatedSession.userId,
+const context = await verifyCandidateTenantMembership({
+  tenantId: selectedTenantId,
+  authenticatedUserId: authenticatedSession.userId,
   requestId
 });
 
-await customerRepository.findById(context, customerId);
+if (context !== null) await locationRepository.findById(context, locationId);
 ```
 
-The factory validates ObjectId strings, trims and bounds the request identifier,
-adds a module-private runtime marker, and freezes the result. A plain object with
-the same visible properties is not trusted. This is a defense-in-depth boundary:
-the API must still ensure that inputs come from authenticated server state, never
-from request bodies, query strings, route parameters, or client-controlled
-headers.
+The raw factory is private to `packages/db`. Candidate verification checks the
+active global user, tenant, and tenant/user membership before it returns a
+frozen, runtime-marked context. A plain object with the same visible properties
+is not trusted. This is a defense-in-depth boundary: the API must still ensure
+the authenticated user ID comes from server state and not from request bodies,
+query strings, route parameters, or client-controlled headers.
 
-Repository implementations introduced in later Phase 2 changes must:
+Repository implementations must:
 
 - inject `tenantId` into every query and write internally;
 - expose business-specific operations rather than arbitrary filters;

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { connectDatabase, disconnectDatabase, getDatabaseConnection } from "../connection";
+import { connectDatabase, disconnectDatabase, getInternalDatabase } from "../connection";
 import { getMigrationStatus, MigrationError, runMigrations } from "./runner";
 import type { Migration } from "./types";
 
@@ -13,6 +13,7 @@ describe.skipIf(uri === undefined)("migration runner", () => {
   const migration: Migration = {
     id: "0001_create_test_records",
     name: "Create integration-test records",
+    checksumMaterial: "test-records-v1",
     async up({ database }) {
       await database
         .collection("migration_test_records")
@@ -25,15 +26,13 @@ describe.skipIf(uri === undefined)("migration runner", () => {
   });
 
   afterAll(async () => {
-    const database = getDatabaseConnection().db;
-    if (database !== undefined) {
-      await database.dropDatabase();
-    }
+    const database = getInternalDatabase();
+    await database.dropDatabase();
     await disconnectDatabase();
   });
 
   it("applies each migration once and reports status", async () => {
-    const database = getDatabaseConnection().db!;
+    const database = getInternalDatabase();
 
     await expect(runMigrations(database, [migration])).resolves.toEqual({
       applied: [migration.id],
@@ -59,7 +58,7 @@ describe.skipIf(uri === undefined)("migration runner", () => {
   });
 
   it("refuses to run an applied migration whose implementation changed", async () => {
-    const database = getDatabaseConnection().db!;
+    const database = getInternalDatabase();
     await runMigrations(database, [migration]);
 
     const changedMigration: Migration = {
@@ -73,19 +72,20 @@ describe.skipIf(uri === undefined)("migration runner", () => {
   });
 
   it("refuses to forget an applied migration definition", async () => {
-    const database = getDatabaseConnection().db!;
+    const database = getInternalDatabase();
     await runMigrations(database, [migration]);
 
     await expect(getMigrationStatus(database, [])).rejects.toThrow("unregistered migration");
   });
 
   it("does not record a failed migration as applied", async () => {
-    const database = getDatabaseConnection().db!;
+    const database = getInternalDatabase();
     await runMigrations(database, [migration]);
 
     const failingMigration: Migration = {
       id: "0002_failing_test_migration",
       name: "Fail during integration test",
+      checksumMaterial: "failing-test-v1",
       up() {
         return Promise.reject(new Error("deliberate migration failure"));
       }
@@ -100,7 +100,7 @@ describe.skipIf(uri === undefined)("migration runner", () => {
   });
 
   it("rejects duplicate, unordered, and malformed migration IDs", async () => {
-    const database = getDatabaseConnection().db!;
+    const database = getInternalDatabase();
 
     await expect(runMigrations(database, [migration, migration])).rejects.toThrow(
       "Duplicate migration ID"

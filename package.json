@@ -11,6 +11,7 @@
     "build": "turbo run build",
     "db:migrate": "pnpm --filter @zuridesk/db migrate",
     "db:migration:status": "pnpm --filter @zuridesk/db migration:status",
+    "db:seed": "pnpm --filter @zuridesk/db seed",
     "dev": "turbo run dev --parallel",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

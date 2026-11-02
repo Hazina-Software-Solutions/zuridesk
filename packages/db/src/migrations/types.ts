@@ -10,6 +10,8 @@ export interface Migration {
   /** Ordered, immutable identifier such as 0001_create_tenants. */
   id: string;
   name: string;
+  /** Immutable migration-owned schema/index material included in the checksum. */
+  checksumMaterial: string;
   /** Must be safe to run again after an interrupted deployment. */
   up(context: MigrationContext): Promise<void>;
 }

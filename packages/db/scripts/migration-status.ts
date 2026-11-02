@@ -1,4 +1,4 @@
-import { connectDatabase, disconnectDatabase } from "../src/connection";
+import { connectDatabase, disconnectDatabase, getInternalDatabase } from "../src/connection";
 import { migrations } from "../src/migrations/registry";
 import { getMigrationStatus } from "../src/migrations/runner";
 
@@ -11,16 +11,11 @@ function requiredEnvironment(name: "MONGODB_URI" | "MONGODB_DB_NAME"): string {
 }
 
 try {
-  const connection = await connectDatabase({
+  await connectDatabase({
     uri: requiredEnvironment("MONGODB_URI"),
     databaseName: requiredEnvironment("MONGODB_DB_NAME")
   });
-  const database = connection.db;
-  if (database === undefined) {
-    throw new Error("MongoDB connection has no selected database");
-  }
-
-  const status = await getMigrationStatus(database, migrations);
+  const status = await getMigrationStatus(getInternalDatabase(), migrations);
   if (status.length === 0) {
     console.log("No versioned business-schema migrations are registered yet.");
   } else {

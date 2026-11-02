@@ -1,3 +1,4 @@
+import { tenantIdentityIndexManifest } from "../migrations/0001-tenant-identity-manifest";
 import type { ApplicationIndexDefinition } from "./index-policy";
 
 export const migrationIndexManifest = [
@@ -8,4 +9,11 @@ export const migrationIndexManifest = [
     kind: "unique",
     keys: [["migrationId", 1]]
   }
+] as const satisfies readonly ApplicationIndexDefinition[];
+
+export const businessIndexManifest = tenantIdentityIndexManifest;
+
+export const applicationIndexManifest = [
+  ...migrationIndexManifest,
+  ...businessIndexManifest
 ] as const satisfies readonly ApplicationIndexDefinition[];

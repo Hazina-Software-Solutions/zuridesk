@@ -2,9 +2,10 @@
 
 ZuriDesk is a proposed multi-tenant operating system for African beauty businesses, launching in Kenya with Nairobi as the initial market.
 
-This repository contains the Phase 1 engineering foundation and the first
-Phase 2 data-foundation slice. It does not yet contain business collections,
-customer data, or a production deployment.
+This repository contains the Phase 1 engineering foundation and the Phase 2.1
+and 2.2 data slices. Tenant identity, locations, memberships, and invitation
+persistence now exist; customer/booking/POS data, authentication, RBAC, public
+business APIs, and production deployment do not.
 
 ## Workspace
 
@@ -32,8 +33,10 @@ pnpm test:integration
 pnpm build
 pnpm db:migration:status
 pnpm db:migrate
+pnpm db:seed
 ```
 
-The current Phase 2 slice establishes shared persistence primitives, trusted
-tenant context, versioned migration tooling, and executable index policy. The
-business models and repositories arrive in subsequent reviewable changes.
+See [Phase 2.2 tenant identity and locations](docs/database/phase-2.2-tenant-identity.md)
+for the implemented behavior, migration and fail-closed synthetic seed, and
+[query-plan evidence](docs/database/phase-2.2-query-plans.md) for the real-Mongo
+index assertions.

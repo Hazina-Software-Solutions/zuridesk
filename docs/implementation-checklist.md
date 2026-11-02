@@ -1,6 +1,6 @@
 # ZuriDesk implementation checklist
 
-- **Last verified:** 2026-10-07
+- **Last verified:** 2026-11-02
 - **Product status:** `PROPOSAL` — no production launch, customers, revenue, or
   production readiness is implied by this checklist.
 - **Update rule:** Update this file in the same change that completes or changes
@@ -19,36 +19,38 @@
 
 ## Status at a glance
 
-| Phase                        | Status                            | Current outcome                                                                                                                 |
-| ---------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Foundation                | Complete for local/CI development | Monorepo, applications, API boundary, MongoDB connection, CI, environment and security baselines                                |
-| 2. Data layer                | In progress                       | Shared primitives, tenant context, migration runner and index policy are complete; business models and repositories are pending |
-| 3. Auth, tenancy and RBAC    | Not started                       | No sign-up, sessions, memberships API, invites or permission enforcement                                                        |
-| 4. Bookings                  | Not started                       | No catalogue, availability engine, appointments or calendar screens                                                             |
-| 5. Staff and customers       | Not started                       | No staff/customer APIs or product screens                                                                                       |
-| 6. Stock and POS             | Not started                       | No inventory ledger, checkout or sales reports                                                                                  |
-| 7. Subscriptions and billing | Not started                       | No plan enforcement, subscription lifecycle or M-Pesa integration                                                               |
-| 8. Marketplace               | Not started                       | No public listings, search, orders or fulfilment workflow                                                                       |
-| 9. Notifications and reports | Not started                       | No queue worker, SMS, WhatsApp, push notifications or business reports                                                          |
-| 10. Hardening and release    | Not started                       | No production infrastructure, restore drill, monitoring or store release                                                        |
+| Phase                        | Status                            | Current outcome                                                                                                                       |
+| ---------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Foundation                | Complete for local/CI development | Monorepo, applications, API boundary, MongoDB connection, CI, environment and security baselines                                      |
+| 2. Data layer                | In progress                       | Shared foundations plus tenant, location, user, membership and invite persistence are complete; later business domains remain pending |
+| 3. Auth, tenancy and RBAC    | Not started                       | No sign-up, sessions, memberships API, invites or permission enforcement                                                              |
+| 4. Bookings                  | Not started                       | No catalogue, availability engine, appointments or calendar screens                                                                   |
+| 5. Staff and customers       | Not started                       | No staff/customer APIs or product screens                                                                                             |
+| 6. Stock and POS             | Not started                       | No inventory ledger, checkout or sales reports                                                                                        |
+| 7. Subscriptions and billing | Not started                       | No plan enforcement, subscription lifecycle or M-Pesa integration                                                                     |
+| 8. Marketplace               | Not started                       | No public listings, search, orders or fulfilment workflow                                                                             |
+| 9. Notifications and reports | Not started                       | No queue worker, SMS, WhatsApp, push notifications or business reports                                                                |
+| 10. Hardening and release    | Not started                       | No production infrastructure, restore drill, monitoring or store release                                                              |
 
-## Next implementation slice
+## Completed implementation slice
 
-The next proposed PR-sized change is **Phase 2.2: tenant identity and
-locations**.
+**Phase 2.2: tenant identity and locations** is implemented and verified.
 
-- [ ] Present the Phase 2.2 implementation plan, files, document shapes,
+- [x] Present the Phase 2.2 implementation plan, files, document shapes,
       indexes, migration and open questions for approval.
-- [ ] Add `tenants`, `locations`, `users`, `memberships`, and `invites` Mongoose
+- [x] Add `tenants`, `locations`, `users`, `memberships`, and `invites` Mongoose
       schemas.
-- [ ] Add the first versioned business-schema migration and rollback note.
-- [ ] Add business-specific global and tenant-scoped repositories.
-- [ ] Add seed fixtures for two tenants and their memberships.
-- [ ] Prove tenant isolation across every tenant-owned repository operation.
-- [ ] Add TTL behavior for expired invites with its documented index-policy
+- [x] Add the first versioned business-schema migration and rollback note.
+- [x] Add business-specific global and tenant-scoped repositories.
+- [x] Add seed fixtures for two tenants and their memberships.
+- [x] Prove tenant isolation across every tenant-owned repository operation.
+- [x] Add TTL behavior for expired invites with its documented index-policy
       exception.
-- [ ] Capture `explain()` output for non-trivial lookup queries.
-- [ ] Document how to run, migrate, seed, and verify the slice.
+- [x] Capture `explain()` output for non-trivial lookup queries.
+- [x] Document how to run, migrate, seed, and verify the slice.
+
+The next persistence slice requires a separately approved scope; the remaining
+Phase 2 domain collections below are not implied by Phase 2.2 completion.
 
 ## Phase 1 — Foundation
 
@@ -113,11 +115,11 @@ locations**.
 
 ### Models, indexes and migrations
 
-- [ ] `tenants`
-- [ ] `locations`
-- [ ] `users`
-- [ ] `memberships`
-- [ ] `invites` with a TTL expiry index
+- [x] `tenants`
+- [x] `locations`
+- [x] `users`
+- [x] `memberships`
+- [x] `invites` with a TTL expiry index
 - [ ] `staff_profiles`
 - [ ] `services`
 - [ ] `customers`
@@ -134,28 +136,29 @@ locations**.
 - [ ] `payments`
 - [ ] `audit_logs`
 - [ ] `notifications`
-- [ ] Add `schemaVersion`, UTC timestamps and soft-delete fields where required.
-- [ ] Ensure every tenant-owned index starts with `tenantId`, except approved
+- [x] Add `schemaVersion`, UTC timestamps and soft-delete fields where required
+      for the Phase 2.2 collections.
+- [x] Ensure every current tenant-owned index starts with `tenantId`, except approved
       TTL and built-in `_id_` indexes.
-- [ ] Add supporting indexes for every repository query.
-- [ ] Capture and review `explain()` results for every non-trivial query.
+- [x] Add supporting indexes for every current repository query.
+- [x] Capture and review `explain()` results for every current non-trivial query.
 
 ### Repository and test enforcement
 
-- [ ] Add business-specific tenant repositories that inject `tenantId` into
-      reads, writes, counts, deletes and bulk operations.
+- [x] Add business-specific tenant repositories that inject `tenantId` into
+      every exposed Phase 2.2 operation.
 - [ ] Add safe aggregation helpers covering `$lookup`, nested lookup pipelines,
       `$unionWith`, and `$graphLookup`.
-- [ ] Add separately named repositories for platform-global collections.
-- [ ] Centralize soft-delete filters and restoration rules.
-- [ ] Prevent model/query/database objects from escaping `packages/db`.
-- [ ] Add a lint rule that rejects raw model imports outside approved database
+- [x] Add separately named repositories for the current platform-global collections.
+- [x] Centralize soft-delete filters and restoration rules for Phase 2.2.
+- [x] Prevent model/query/database objects from escaping `packages/db`.
+- [x] Add a boundary rule that rejects raw model imports outside approved database
       model and repository modules.
-- [ ] Add seed data for at least two tenants.
-- [ ] Add reusable tenant-isolation contract tests for every tenant-owned
+- [x] Add seed data for at least two tenants.
+- [x] Add tenant-isolation contract tests for every current tenant-owned
       collection.
-- [ ] Prove tenant A cannot read, count, aggregate, update, or delete tenant B's
-      records.
+- [x] Prove tenant A cannot read, count, aggregate, update, archive, restore, or
+      revoke tenant B's Phase 2.2 records.
 
 ## Phase 3 — Authentication, tenancy and RBAC
 

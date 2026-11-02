@@ -1,4 +1,4 @@
-import mongoose, { type Connection } from "mongoose";
+import mongoose from "mongoose";
 
 export interface DatabaseConnectionOptions {
   uri: string;
@@ -9,11 +9,11 @@ export interface DatabaseConnectionOptions {
 
 export type DatabaseHealth = "up" | "down";
 
-let connectionPromise: Promise<Connection> | undefined;
+let connectionPromise: Promise<void> | undefined;
 
-export async function connectDatabase(options: DatabaseConnectionOptions): Promise<Connection> {
+export async function connectDatabase(options: DatabaseConnectionOptions): Promise<void> {
   if (mongoose.connection.readyState === mongoose.ConnectionStates.connected) {
-    return mongoose.connection;
+    return;
   }
 
   connectionPromise ??= mongoose
@@ -23,7 +23,7 @@ export async function connectDatabase(options: DatabaseConnectionOptions): Promi
       maxPoolSize: options.maxPoolSize ?? 10,
       serverSelectionTimeoutMS: options.serverSelectionTimeoutMs ?? 5_000
     })
-    .then((instance) => instance.connection)
+    .then(() => undefined)
     .catch((error: unknown) => {
       connectionPromise = undefined;
       throw error;
@@ -32,8 +32,16 @@ export async function connectDatabase(options: DatabaseConnectionOptions): Promi
   return connectionPromise;
 }
 
-export function getDatabaseConnection(): Connection {
+export function getInternalDatabaseConnection(): mongoose.Connection {
   return mongoose.connection;
+}
+
+export function getInternalDatabase(): NonNullable<mongoose.Connection["db"]> {
+  const database = mongoose.connection.db;
+  if (database === undefined) {
+    throw new Error("MongoDB connection has no selected database");
+  }
+  return database;
 }
 
 export async function checkDatabaseHealth(): Promise<DatabaseHealth> {

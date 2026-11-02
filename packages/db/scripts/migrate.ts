@@ -1,4 +1,4 @@
-import { connectDatabase, disconnectDatabase } from "../src/connection";
+import { connectDatabase, disconnectDatabase, getInternalDatabase } from "../src/connection";
 import { migrations } from "../src/migrations/registry";
 import { runMigrations } from "../src/migrations/runner";
 
@@ -11,16 +11,11 @@ function requiredEnvironment(name: "MONGODB_URI" | "MONGODB_DB_NAME"): string {
 }
 
 try {
-  const connection = await connectDatabase({
+  await connectDatabase({
     uri: requiredEnvironment("MONGODB_URI"),
     databaseName: requiredEnvironment("MONGODB_DB_NAME")
   });
-  const database = connection.db;
-  if (database === undefined) {
-    throw new Error("MongoDB connection has no selected database");
-  }
-
-  const result = await runMigrations(database, migrations);
+  const result = await runMigrations(getInternalDatabase(), migrations);
   console.log(`Applied migrations: ${result.applied.join(", ") || "none"}`);
   console.log(`Already applied: ${result.skipped.join(", ") || "none"}`);
 } catch (error) {
