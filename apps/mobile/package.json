@@ -16,9 +16,11 @@
     "@zuridesk/api-client": "workspace:*",
     "@zuridesk/ui": "workspace:*",
     "expo": "~57.0.26",
+    "expo-secure-store": "57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-safe-area-context": "5.7.0",
     "zod": "4.6.5"
   },
   "devDependencies": {

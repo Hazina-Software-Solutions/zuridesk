@@ -33,18 +33,32 @@ describe.skipIf(uri === undefined)("tenant identity migration", () => {
       );
 
     await expect(runMigrations(database, migrations)).resolves.toEqual({
-      applied: ["0001_create_tenant_identity_collections"],
+      applied: ["0001_create_tenant_identity_collections", "0002_add_auth_tenancy_rbac"],
       skipped: []
     });
     await expect(runMigrations(database, migrations)).resolves.toEqual({
       applied: [],
-      skipped: ["0001_create_tenant_identity_collections"]
+      skipped: ["0001_create_tenant_identity_collections", "0002_add_auth_tenancy_rbac"]
     });
 
     const collections = new Set(
       (await database.listCollections({}, { nameOnly: true }).toArray()).map(({ name }) => name)
     );
-    for (const expected of ["tenants", "users", "locations", "memberships", "invites"]) {
+    for (const expected of [
+      "tenants",
+      "users",
+      "locations",
+      "memberships",
+      "invites",
+      "auth_identities",
+      "auth_sessions",
+      "refresh_token_history",
+      "auth_challenges",
+      "rate_limit_buckets",
+      "user_tenant_directory",
+      "security_events",
+      "tenant_audit_logs"
+    ]) {
       expect(collections.has(expected)).toBe(true);
     }
   });
@@ -53,7 +67,9 @@ describe.skipIf(uri === undefined)("tenant identity migration", () => {
     const database = getInternalDatabase();
     assertValidIndexManifest(businessIndexManifest);
 
-    for (const collectionName of ["tenants", "users", "locations", "memberships", "invites"]) {
+    for (const collectionName of [
+      ...new Set(businessIndexManifest.map(({ collection }) => collection))
+    ]) {
       const expected = businessIndexManifest.filter((index) => index.collection === collectionName);
       const actual = await database.collection(collectionName).indexes();
       expect(actual.map((index) => index.name).sort()).toEqual(
@@ -69,6 +85,9 @@ describe.skipIf(uri === undefined)("tenant identity migration", () => {
           expect(live!.expireAfterSeconds).toBe(index.expireAfterSeconds);
         } else {
           expect(live!.expireAfterSeconds).toBeUndefined();
+        }
+        if ("partialFilterExpression" in index) {
+          expect(live!.partialFilterExpression).toEqual(index.partialFilterExpression);
         }
       }
     }

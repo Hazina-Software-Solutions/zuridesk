@@ -11,6 +11,7 @@ export interface ApplicationIndexDefinition {
   kind: IndexKind;
   keys: readonly IndexKey[];
   expireAfterSeconds?: number;
+  partialFilterExpression?: Readonly<Record<string, unknown>>;
   exception?: "tenant_ttl_index" | "mongodb_builtin_id";
   exceptionReason?: string;
 }
@@ -48,6 +49,10 @@ function validateIndex(index: ApplicationIndexDefinition): string[] {
     }
   } else if (index.expireAfterSeconds !== undefined) {
     violations.push(`${label}: only TTL indexes may define expireAfterSeconds`);
+  }
+
+  if (index.kind !== "unique" && index.partialFilterExpression !== undefined) {
+    violations.push(`${label}: partial filters are supported only for unique indexes`);
   }
 
   if (index.kind === "system") {

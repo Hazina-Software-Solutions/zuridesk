@@ -1,6 +1,6 @@
 # ZuriDesk implementation checklist
 
-- **Last verified:** 2026-11-02
+- **Last verified:** 2026-11-03
 - **Product status:** `PROPOSAL` — no production launch, customers, revenue, or
   production readiness is implied by this checklist.
 - **Update rule:** Update this file in the same change that completes or changes
@@ -23,7 +23,7 @@
 | ---------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. Foundation                | Complete for local/CI development | Monorepo, applications, API boundary, MongoDB connection, CI, environment and security baselines                                      |
 | 2. Data layer                | In progress                       | Shared foundations plus tenant, location, user, membership and invite persistence are complete; later business domains remain pending |
-| 3. Auth, tenancy and RBAC    | Not started                       | No sign-up, sessions, memberships API, invites or permission enforcement                                                              |
+| 3. Auth, tenancy and RBAC    | Complete for local/CI development | Email/password auth, rotating sessions, tenant selection, invites, RBAC, web/Expo shells, and real MongoDB HTTP coverage              |
 | 4. Bookings                  | Not started                       | No catalogue, availability engine, appointments or calendar screens                                                                   |
 | 5. Staff and customers       | Not started                       | No staff/customer APIs or product screens                                                                                             |
 | 6. Stock and POS             | Not started                       | No inventory ledger, checkout or sales reports                                                                                        |
@@ -134,7 +134,7 @@ Phase 2 domain collections below are not implied by Phase 2.2 completion.
 - [ ] Immutable `plans` and plan versions
 - [ ] `subscriptions` with entitlement snapshots
 - [ ] `payments`
-- [ ] `audit_logs`
+- [x] `tenant_audit_logs` for Phase 3 security-sensitive tenant mutations
 - [ ] `notifications`
 - [x] Add `schemaVersion`, UTC timestamps and soft-delete fields where required
       for the Phase 2.2 collections.
@@ -162,25 +162,36 @@ Phase 2 domain collections below are not implied by Phase 2.2 completion.
 
 ## Phase 3 — Authentication, tenancy and RBAC
 
-- [ ] Decide the first-release login methods: password, email OTP, phone OTP, or
+- [x] Decide the first-release login methods: password, email OTP, phone OTP, or
       an explicitly approved combination.
-- [ ] Add password hashing with Argon2 if passwords are enabled.
-- [ ] Add OTP issue, verification, expiry and attempt limiting if OTP is enabled.
-- [ ] Add short-lived access tokens and rotating refresh-token families.
-- [ ] Add secure web token storage and Expo SecureStore mobile storage.
-- [ ] Add sign-up that transactionally creates a tenant, default location, user,
+- [x] Add password hashing with Argon2 if passwords are enabled.
+- [x] Record that OTP is deferred; no OTP endpoint or credential exists.
+- [x] Add short-lived access tokens and rotating refresh-token families.
+- [x] Add secure web token storage and Expo SecureStore mobile storage.
+- [x] Add sign-up that transactionally creates a tenant, default location, user,
       owner membership, and required baseline records.
-- [ ] Add active-tenant selection for users with multiple memberships.
-- [ ] Add staff invitation, acceptance, expiry, revocation and resend flows.
-- [ ] Define the central `resource:action` permission map in `packages/shared`.
-- [ ] Document the complete role-permission matrix.
-- [ ] Add one automated test for every permission-matrix cell.
-- [ ] Enforce permissions in API middleware and services.
-- [ ] Add stylist self-only and other approved row-level access rules.
-- [ ] Add separate platform-admin authentication and authorization boundaries.
-- [ ] Rate-limit authentication and OTP endpoints.
-- [ ] Audit role, membership and access-sensitive changes.
-- [ ] Add endpoint-level cross-tenant isolation tests.
+- [x] Add active-tenant selection for users with multiple memberships.
+- [x] Add staff invitation, acceptance, expiry, revocation and resend flows.
+- [x] Define the central `resource:action` permission map in `packages/shared`.
+- [x] Document the complete role-permission matrix in code and Phase 3 docs.
+- [x] Add one automated test for every permission-matrix cell.
+- [x] Enforce current permissions in API middleware and services.
+- [x] Represent current self-only profile/session permissions; later domain row
+      rules remain with their owning phases.
+- [x] Keep platform administration fail-closed with no endpoints; its separate
+      MFA/provisioning/recovery design remains deferred.
+- [x] Rate-limit current authentication endpoints with atomic MongoDB buckets.
+- [x] Prevalidate indexed challenge/invitation public IDs before password hashing;
+      atomically revalidate and consume after hashing.
+- [x] Support authenticated existing-user invitation acceptance and authorized
+      manual invitation revocation on web, mobile and API.
+- [x] Derive web/mobile credential transport from Origin/cookie evidence rather
+      than trusting the request body's transport claim.
+- [x] Audit role, membership and invitation changes; retention remains `UNKNOWN`.
+- [x] Add real HTTP tests for live tenant selection, revocation, RBAC, and invite
+      isolation boundaries.
+- [ ] Complete universal-link/app-association and representative-device E2E
+      testing after production host/mobile topology is approved.
 
 ## Phase 4 — Bookings
 
@@ -342,7 +353,10 @@ Phase 2 domain collections below are not implied by Phase 2.2 completion.
 
 ## Decisions still required
 
-- [ ] First-release authentication methods.
+- [x] First-release authentication methods (email/password plus one-time email
+      verification/reset/invitation links; OTP deferred).
+- [ ] Production email provider, sender/domain configuration, and escalation path.
+- [ ] Authentication/audit retention and deletion policy.
 - [ ] Plan pricing, limits, trial duration and grace period.
 - [ ] Production application host and Atlas provider/region.
 - [ ] Production Redis provider when queue work begins.

@@ -20,6 +20,7 @@ export interface TenantDocument extends TimestampedDocument {
   defaultLocationId: Types.ObjectId;
   status: TenantStatus;
   deletedAt: Date | null;
+  ownerGuardVersion: number;
 }
 
 export interface LocationDocument extends TimestampedDocument {
@@ -61,7 +62,7 @@ export interface InviteRecipientDocument {
 
 export interface InviteDocument extends TimestampedDocument {
   _id: Types.ObjectId;
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   tenantId: Types.ObjectId;
   recipient: InviteRecipientDocument;
   roleKeys: RoleKey[];
@@ -69,6 +70,7 @@ export interface InviteDocument extends TimestampedDocument {
   status: InviteStatus;
   expiresAt: Date;
   acceptedAt: Date | null;
+  acceptedByUserId: Types.ObjectId | null;
   revokedAt: Date | null;
 }
 
@@ -112,7 +114,8 @@ export const tenantSchema = new Schema<TenantDocument>(
     name: { type: String, required: true, trim: true, minlength: 1, maxlength: 120 },
     defaultLocationId: requiredObjectId,
     status: { type: String, required: true, enum: ["active", "suspended"], default: "active" },
-    deletedAt
+    deletedAt,
+    ownerGuardVersion: { type: Number, required: true, default: 0, min: 0 }
   },
   { ...schemaOptions, collection: "tenants" }
 );
@@ -211,7 +214,7 @@ const recipientSchema = new Schema<InviteRecipientDocument>(
 
 export const inviteSchema = new Schema<InviteDocument>(
   {
-    schemaVersion,
+    schemaVersion: { ...schemaVersion, enum: [1, 2] },
     tenantId: requiredImmutableObjectId,
     recipient: { type: recipientSchema, required: true },
     roleKeys: {
@@ -234,6 +237,7 @@ export const inviteSchema = new Schema<InviteDocument>(
     },
     expiresAt: { type: Date, required: true, immutable: true },
     acceptedAt: deletedAt,
+    acceptedByUserId: { type: Schema.Types.ObjectId, default: null },
     revokedAt: deletedAt
   },
   { ...schemaOptions, collection: "invites" }
@@ -242,10 +246,14 @@ export const inviteSchema = new Schema<InviteDocument>(
 inviteSchema.pre("validate", function (this: HydratedDocument<InviteDocument>) {
   const hasAcceptedAt = this.acceptedAt !== null;
   const hasRevokedAt = this.revokedAt !== null;
+  const hasAcceptedUser = this.acceptedByUserId != null;
   const lifecycleIsValid =
-    (this.status === "pending" && !hasAcceptedAt && !hasRevokedAt) ||
-    (this.status === "accepted" && hasAcceptedAt && !hasRevokedAt) ||
-    (this.status === "revoked" && !hasAcceptedAt && hasRevokedAt);
+    (this.status === "pending" && !hasAcceptedAt && !hasRevokedAt && !hasAcceptedUser) ||
+    (this.status === "accepted" &&
+      hasAcceptedAt &&
+      !hasRevokedAt &&
+      (this.schemaVersion === 1 || hasAcceptedUser)) ||
+    (this.status === "revoked" && !hasAcceptedAt && hasRevokedAt && !hasAcceptedUser);
 
   if (!lifecycleIsValid) {
     throw new Error("Invite status and lifecycle timestamps do not match");

@@ -63,4 +63,15 @@ describe("API foundation", () => {
       error: { code: "CORS_ORIGIN_DENIED", message: "Request rejected" }
     });
   });
+
+  it("fails closed when production authentication is not configured", async () => {
+    await expect(
+      buildApp({
+        allowedOrigins: ["https://app.example.com"],
+        checkDatabase: () => Promise.resolve("up"),
+        environment: "production",
+        logger: false
+      })
+    ).rejects.toThrow("Authentication service configuration is required in production");
+  });
 });

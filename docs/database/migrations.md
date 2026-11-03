@@ -40,6 +40,9 @@ migration tracking collection and its unique index if they do not exist.
 
 Phase 2.2 operational details, seed safety, and compatibility guidance are in
 [Phase 2.2 tenant identity and locations](phase-2.2-tenant-identity.md).
+Phase 3 migration order, partial-rerun behavior, compatibility, and operational
+checks are in the
+[Phase 3 authentication runbook](../runbooks/phase-3-auth-operations.md).
 
 ## Deployment and recovery
 

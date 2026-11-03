@@ -31,3 +31,37 @@ export {
   type StockUnit
 } from "./domain/stock";
 export { objectIdSchema, type ObjectIdString } from "./ids";
+export {
+  ACTIONS,
+  MANAGER_ASSIGNABLE_ROLES,
+  RESOURCES,
+  ROLE_KEYS,
+  ROLE_PERMISSIONS,
+  hasPermission,
+  mayManageTargetRoles,
+  permissionsForRoles,
+  type Action,
+  type Permission,
+  type Resource,
+  type RoleKey
+} from "./auth/permissions";
+export {
+  forgotPasswordSchema,
+  genericAcceptedSchema,
+  inviteAcceptSchema,
+  inviteIssueSchema,
+  inviteRevokeParamsSchema,
+  membershipAdminSchema,
+  mobileSessionResponseSchema,
+  ownerSignupCompleteSchema,
+  ownerSignupRequestSchema,
+  passwordSchema,
+  refreshSchema,
+  resetPasswordSchema,
+  sessionResponseSchema,
+  signInSchema,
+  tenantSelectSchema,
+  tenantSummarySchema,
+  webSessionResponseSchema,
+  type SessionResponse
+} from "./contracts/auth";

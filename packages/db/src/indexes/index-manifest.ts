@@ -1,4 +1,5 @@
 import { tenantIdentityIndexManifest } from "../migrations/0001-tenant-identity-manifest";
+import { phase3IndexManifest } from "../migrations/0002-auth-tenancy-manifest";
 import type { ApplicationIndexDefinition } from "./index-policy";
 
 export const migrationIndexManifest = [
@@ -11,7 +12,7 @@ export const migrationIndexManifest = [
   }
 ] as const satisfies readonly ApplicationIndexDefinition[];
 
-export const businessIndexManifest = tenantIdentityIndexManifest;
+export const businessIndexManifest = [...tenantIdentityIndexManifest, ...phase3IndexManifest];
 
 export const applicationIndexManifest = [
   ...migrationIndexManifest,

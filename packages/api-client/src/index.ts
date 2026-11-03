@@ -6,4 +6,8 @@ export function createZuriDeskApiClient(baseUrl: string) {
   return createClient<paths>({ baseUrl });
 }
 
+export function createZuriDeskWebApiClient(baseUrl: string) {
+  return createClient<paths>({ baseUrl, credentials: "include" });
+}
+
 export type { paths as ZuriDeskApiPaths } from "./generated/schema";

@@ -31,7 +31,7 @@ export const inviteRepository = {
     }
 
     const document = await InviteModel.create({
-      schemaVersion: 1,
+      schemaVersion: 2,
       ...(input.id === undefined ? {} : { _id: toObjectId(input.id) }),
       tenantId: toObjectId(context.tenantId, "tenantId"),
       recipient: normalizeRecipient(input.recipient),
@@ -40,6 +40,7 @@ export const inviteRepository = {
       status: "pending",
       expiresAt: new Date(input.expiresAt.getTime()),
       acceptedAt: null,
+      acceptedByUserId: null,
       revokedAt: null
     });
     return inviteDto(document);

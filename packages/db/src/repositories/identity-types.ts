@@ -11,7 +11,7 @@ import type {
 
 interface TimestampedDto {
   readonly id: ObjectIdString;
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -66,6 +66,7 @@ export interface InviteDto extends TimestampedDto {
   readonly status: InviteStatus;
   readonly expiresAt: Date;
   readonly acceptedAt: Date | null;
+  readonly acceptedByUserId: ObjectIdString | null;
   readonly revokedAt: Date | null;
 }
 

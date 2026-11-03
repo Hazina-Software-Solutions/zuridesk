@@ -1,7 +1,7 @@
 # Local development
 
-This guide describes the Phase 1 foundation contract. Keep commands aligned
-with the root `package.json` as the scaffold evolves.
+This guide describes the local foundation through Phase 3. Keep commands
+aligned with the root `package.json` as the implementation evolves.
 
 ## Prerequisites
 
@@ -27,6 +27,11 @@ Populate local values from an approved secret-sharing channel. `.env.example`
 contains names and safe placeholders only. Local `.env*` files must remain
 ignored by Git. Never prefix server secrets with `NEXT_PUBLIC_` or Expo public
 environment prefixes.
+
+Phase 3 requires separate versioned key maps for each token purpose and an
+Ed25519 signing key pair. `AUTH_DELIVERY_MODE=capture` is an explicit local/test
+mode only. `unconfigured` is the safe default and rejects delivery-dependent
+flows before persistence. Production rejects capture.
 
 The API's MongoDB URI must point to a replica set. Transactions are a product
 requirement, so a standalone `mongod` is not a valid integration environment.
@@ -71,8 +76,10 @@ possible. Tests must create unique databases, use synthetic fixtures, and clean
 up only databases they created. Never point test cleanup at a development,
 staging, or production database.
 
-The Phase 1 transaction smoke test must prove both commit and rollback. Later
-phases add tenant-isolation, RBAC, double-booking, and stock concurrency tests.
+The suite proves transaction commit/rollback, tenant isolation, Phase 3
+migration/backfill behavior, refresh/invitation/owner concurrency, cookies,
+CSRF, session revocation, RBAC, and enumeration resistance. Booking and stock
+concurrency arrive with their domain phases.
 
 Start the local replica set and run the integration test with:
 

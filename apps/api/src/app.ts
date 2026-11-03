@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import swagger from "@fastify/swagger";
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
@@ -10,12 +11,16 @@ import {
 } from "fastify-type-provider-zod";
 
 import { healthRoutes } from "./routes/health";
+import type { AuthService } from "./auth/service";
+import { authRoutes } from "./routes/auth";
+import { tenancyRoutes } from "./routes/tenancy";
 
 export interface BuildAppOptions {
   allowedOrigins: readonly string[];
   checkDatabase: () => Promise<"up" | "down">;
   environment: "development" | "test" | "production";
   logger?: boolean | Record<string, unknown>;
+  authService?: AuthService;
 }
 
 interface HttpError extends FastifyError {
@@ -45,6 +50,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   });
 
   await app.register(helmet);
+  await app.register(cookie);
   await app.register(cors, {
     credentials: true,
     origin(origin, callback) {
@@ -63,7 +69,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.setErrorHandler((error: HttpError, request, reply) => {
     const statusCode =
-      error.statusCode !== undefined && error.statusCode < 500 ? error.statusCode : 500;
+      error.statusCode !== undefined && error.statusCode >= 400 && error.statusCode <= 599
+        ? error.statusCode
+        : 500;
     const code = error.code ?? (statusCode === 500 ? "INTERNAL_SERVER_ERROR" : "REQUEST_REJECTED");
 
     request.log.error({ errorType: error.name, code, requestId: request.id }, "request failed");
@@ -71,7 +79,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     return reply.code(statusCode).send({
       error: {
         code,
-        message: statusCode === 500 ? "An unexpected error occurred" : "Request rejected",
+        message: statusCode >= 500 ? "Service unavailable" : "Request rejected",
         requestId: request.id
       }
     });
@@ -80,6 +88,35 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await app.register(healthRoutes, {
     prefix: "/health",
     checkDatabase: options.checkDatabase
+  });
+
+  if (options.authService === undefined && options.environment === "production") {
+    throw new Error("Authentication service configuration is required in production");
+  }
+  const authService =
+    options.authService ??
+    (new Proxy(
+      {},
+      {
+        get() {
+          return () => {
+            throw Object.assign(new Error("Authentication unavailable"), {
+              code: "AUTHENTICATION_UNAVAILABLE",
+              statusCode: 503
+            });
+          };
+        }
+      }
+    ) as AuthService);
+  await app.register(authRoutes, {
+    prefix: "/v1/auth",
+    auth: authService,
+    allowedOrigins: options.allowedOrigins
+  });
+  await app.register(tenancyRoutes, {
+    prefix: "/v1",
+    auth: authService,
+    allowedOrigins: options.allowedOrigins
   });
 
   return app;

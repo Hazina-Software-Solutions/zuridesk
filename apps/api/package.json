@@ -9,16 +9,18 @@
     "start": "node ../../scripts/run-with-root-env.mjs node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --exclude '**/*.integration.test.ts'",
-    "test:integration": "echo 'API integration coverage is exercised through @zuridesk/db in Phase 1'",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "generate:openapi": "tsx scripts/write-openapi.ts",
     "check:openapi": "tsx scripts/write-openapi.ts --check"
   },
   "dependencies": {
+    "@fastify/cookie": "11.1.5",
     "@fastify/cors": "11.3.0",
     "@fastify/helmet": "13.1.1",
     "@fastify/swagger": "9.9.1",
     "@zuridesk/db": "workspace:*",
     "@zuridesk/shared": "workspace:*",
+    "argon2": "0.45.2",
     "fastify": "5.12.5",
     "fastify-type-provider-zod": "7.0.0",
     "zod": "4.6.5"

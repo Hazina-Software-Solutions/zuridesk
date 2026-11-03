@@ -6,19 +6,34 @@ export {
   type DatabaseHealth
 } from "./connection";
 export { type TrustedTenantContext } from "./context/tenant-context";
-export { currentTenantRepository } from "./repositories/tenant-repository";
+export { DatabaseCommandError, type DatabaseCommandErrorCode } from "./commands/errors";
 export {
-  locationRepository,
-  type CreateLocationInput,
-  type UpdateLocationInput
-} from "./repositories/location-repository";
-export {
-  membershipRepository,
-  verifyCandidateTenantMembership,
-  type CreateMembershipInput,
-  type VerifyCandidateTenantInput
-} from "./repositories/membership-repository";
-export { inviteRepository, type CreateInviteInput } from "./repositories/invite-repository";
+  acceptInvite,
+  administerMembership,
+  clearActiveTenant,
+  consumePasswordReset,
+  consumeRateLimit,
+  createAuthChallenge,
+  createSession,
+  findAuthIdentityByEmail,
+  getActiveSession,
+  getAuthChallengeSubjectKeyVersion,
+  getAuthenticationUser,
+  getRefreshSession,
+  issueOrResendInvite,
+  listAuthorizedTenants,
+  prevalidateAuthChallenge,
+  prevalidateInvite,
+  recordSecurityEvent,
+  rehashIdentityPassword,
+  registerVerifiedOwner,
+  revokeAllUserSessions,
+  revokeInvite,
+  revokeSession,
+  rotateSession,
+  selectActiveTenant,
+  verifyLiveTenantAccess
+} from "./commands/phase3-commands";
 export type {
   InviteDto,
   InviteRecipientDto,

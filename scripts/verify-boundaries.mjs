@@ -18,6 +18,7 @@ const databasePackageRoot = resolve(repositoryRoot, "packages/db");
 const databaseModelsRoot = resolve(databasePackageRoot, "src/models");
 const permittedModelConsumerRoots = [
   databaseModelsRoot,
+  resolve(databasePackageRoot, "src/commands"),
   resolve(databasePackageRoot, "src/repositories"),
   resolve(databasePackageRoot, "src/seeds")
 ];
@@ -126,6 +127,15 @@ for (const sourceRoot of sourceRoots) {
       ) {
         violations.push(
           `${relativeFile}: web and mobile must access business data through @zuridesk/api-client`
+        );
+      }
+
+      if (
+        isInside(file, resolve(repositoryRoot, "apps/api/src/routes")) &&
+        (specifier === "@zuridesk/db" || specifier.startsWith("@zuridesk/db/"))
+      ) {
+        violations.push(
+          `${relativeFile}: API routes must call approved services rather than importing @zuridesk/db`
         );
       }
 

@@ -4,6 +4,7 @@ packages:
 
 minimumReleaseAgeExclude:
   - postcss@8.5.29
+  - argon2@0.45.2
 
 allowBuilds:
   esbuild: true

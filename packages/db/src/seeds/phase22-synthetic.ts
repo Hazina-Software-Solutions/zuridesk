@@ -164,7 +164,7 @@ export async function seedPhase22SyntheticFixtures(): Promise<SyntheticSeedCount
       { _id: ids.inviteA },
       {
         $setOnInsert: {
-          schemaVersion: 1,
+          schemaVersion: 2,
           tenantId: ids.tenantA,
           recipient: { kind: "email", value: "invite-a@zuridesk.example" },
           roleKeys: ["stylist"],
@@ -172,6 +172,7 @@ export async function seedPhase22SyntheticFixtures(): Promise<SyntheticSeedCount
           status: "pending",
           expiresAt: originalExpiry,
           acceptedAt: null,
+          acceptedByUserId: null,
           revokedAt: null
         }
       },
@@ -181,7 +182,7 @@ export async function seedPhase22SyntheticFixtures(): Promise<SyntheticSeedCount
       { _id: ids.inviteB },
       {
         $setOnInsert: {
-          schemaVersion: 1,
+          schemaVersion: 2,
           tenantId: ids.tenantB,
           recipient: { kind: "email", value: "invite-b@zuridesk.example" },
           roleKeys: ["receptionist"],
@@ -189,6 +190,7 @@ export async function seedPhase22SyntheticFixtures(): Promise<SyntheticSeedCount
           status: "pending",
           expiresAt: originalExpiry,
           acceptedAt: null,
+          acceptedByUserId: null,
           revokedAt: null
         }
       },

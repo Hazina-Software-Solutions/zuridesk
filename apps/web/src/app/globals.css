@@ -14,3 +14,108 @@
 body {
   margin: 0;
 }
+
+button,
+input {
+  font: inherit;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at top left, #f4e4eb, transparent 38%), #fffaf5;
+}
+
+.auth-card {
+  width: min(100%, 520px);
+  display: grid;
+  gap: 24px;
+  padding: clamp(28px, 6vw, 52px);
+  border: 1px solid rgb(24 20 17 / 10%);
+  border-radius: 28px;
+  background: white;
+  box-shadow: 0 24px 80px rgb(54 37 28 / 10%);
+}
+
+.auth-card h1,
+.auth-card h2,
+.auth-card p {
+  margin: 0;
+}
+
+.auth-card h1 {
+  font-family: Georgia, serif;
+  font-size: clamp(2.2rem, 8vw, 4rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.eyebrow {
+  color: #713a57;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.stack input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgb(24 20 17 / 18%);
+  border-radius: 12px;
+}
+
+.stack button,
+.tenant-button {
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 12px;
+  color: white;
+  background: #713a57;
+  cursor: pointer;
+}
+
+.tenant-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+}
+
+.tenant-button small {
+  color: rgb(255 255 255 / 75%);
+}
+
+.auth-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.text-button {
+  padding: 0;
+  border: 0;
+  color: #713a57;
+  background: transparent;
+  cursor: pointer;
+}
+
+.notice,
+.workspace-shell {
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: #4f3d34;
+  background: #f7f0eb;
+}
+
+.workspace-shell {
+  display: grid;
+  gap: 12px;
+}
