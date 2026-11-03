@@ -25,3 +25,10 @@ References:
 
 - [MongoDB TTL indexes](https://www.mongodb.com/docs/manual/core/index-ttl/)
 - [MongoDB index creation](https://www.mongodb.com/docs/manual/reference/method/db.collection.createIndex/)
+
+Phase 4.1 query/index mappings and winning-plan evidence are described in
+[Phase 4.1 booking domain foundation](phase-4.1-booking-foundation.md). Schedule
+versions and date overrides use tenant-prefixed partial unique indexes over live
+records so archived history cannot block a deliberate replacement. Booking
+status reads use the `tenantId,status,deletedAt` prefix, and staff lock identity
+uses canonical `tenantId,staffProfileId,utcDate` keys.

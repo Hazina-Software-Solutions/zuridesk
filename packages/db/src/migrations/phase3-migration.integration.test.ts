@@ -134,7 +134,7 @@ describe.skipIf(uri === undefined)("Phase 3 forward migration", () => {
     });
 
     await expect(runMigrations(database, migrations)).resolves.toEqual({
-      applied: ["0002_add_auth_tenancy_rbac"],
+      applied: ["0002_add_auth_tenancy_rbac", "0003_add_booking_domain_foundation"],
       skipped: ["0001_create_tenant_identity_collections"]
     });
     expect(

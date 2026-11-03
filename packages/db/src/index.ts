@@ -49,3 +49,12 @@ export type {
   UserDto,
   UserStatus
 } from "./repositories/identity-types";
+export {
+  bookingConcurrencyRepository,
+  bookingConfigurationRepository,
+  bookingScheduleRepository,
+  bookingReadRepository,
+  serviceCatalogueRepository,
+  staffBookingProfileRepository,
+  type Phase41Record
+} from "./repositories/phase4-repositories";

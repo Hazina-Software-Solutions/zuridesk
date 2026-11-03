@@ -43,6 +43,9 @@ Phase 2.2 operational details, seed safety, and compatibility guidance are in
 Phase 3 migration order, partial-rerun behavior, compatibility, and operational
 checks are in the
 [Phase 3 authentication runbook](../runbooks/phase-3-auth-operations.md).
+Phase 4.1's additive, no-backfill migration, compatibility boundary and recovery
+guidance are documented in
+[Phase 4.1 booking domain foundation](phase-4.1-booking-foundation.md).
 
 ## Deployment and recovery
 

@@ -30,6 +30,43 @@ export {
   type StockQuantity,
   type StockUnit
 } from "./domain/stock";
+export {
+  bookingLineSnapshotSchema,
+  bookingLineStatusSchema,
+  bookingEventTypeSchema,
+  bookingStatusSchema,
+  bufferedOccupancyInputSchema,
+  dateOverrideInputSchema,
+  dateOverrideIdentitySchema,
+  guestSnapshotSchema,
+  locationAccessInputSchema,
+  localDateSchema,
+  minuteOfDaySchema,
+  mutationClaimInputSchema,
+  mutationCompletionInputSchema,
+  scheduleIntervalSchema,
+  scheduleIntervalsSchema,
+  scheduleOwnerTypeSchema,
+  serviceCreateInputSchema,
+  serviceOfferingInputSchema,
+  serviceUpdateInputSchema,
+  staffBookingProfileCreateInputSchema,
+  staffLocationInputSchema,
+  staffScheduleModeSchema,
+  staffServiceInputSchema,
+  unavailabilityInputSchema,
+  weeklyScheduleSuccessorInputSchema,
+  weeklyScheduleSchema,
+  type BookingLineSnapshot,
+  type BookingLineStatus,
+  type BookingEventType,
+  type BookingStatus,
+  type GuestSnapshot,
+  type ScheduleInterval,
+  type ScheduleOwnerType,
+  type StaffScheduleMode,
+  type WeeklySchedule
+} from "./domain/bookings";
 export { objectIdSchema, type ObjectIdString } from "./ids";
 export {
   ACTIONS,

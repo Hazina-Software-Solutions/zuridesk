@@ -24,7 +24,7 @@
 | 1. Foundation                | Complete for local/CI development | Monorepo, applications, API boundary, MongoDB connection, CI, environment and security baselines                                      |
 | 2. Data layer                | In progress                       | Shared foundations plus tenant, location, user, membership and invite persistence are complete; later business domains remain pending |
 | 3. Auth, tenancy and RBAC    | Complete for local/CI development | Email/password auth, rotating sessions, tenant selection, invites, RBAC, web/Expo shells, and real MongoDB HTTP coverage              |
-| 4. Bookings                  | Not started                       | No catalogue, availability engine, appointments or calendar screens                                                                   |
+| 4. Bookings                  | Foundation in progress            | Phase 4.1 domain/data foundation exists; availability, booking commands, APIs and screens remain pending                              |
 | 5. Staff and customers       | Not started                       | No staff/customer APIs or product screens                                                                                             |
 | 6. Stock and POS             | Not started                       | No inventory ledger, checkout or sales reports                                                                                        |
 | 7. Subscriptions and billing | Not started                       | No plan enforcement, subscription lifecycle or M-Pesa integration                                                                     |
@@ -194,6 +194,32 @@ Phase 2 domain collections below are not implied by Phase 2.2 completion.
       testing after production host/mobile topology is approved.
 
 ## Phase 4 — Bookings
+
+### Phase 4.1 — Domain and data foundation
+
+- [x] Add migration `0003` with a read-only preflight, additive empty
+      collections, tenant-prefixed indexes, postflight checks and no fabricated
+      hours, staff, customers or bookings.
+- [x] Add strict browser-safe contracts and Mongoose models for the service
+      catalogue, staff booking projection, separate authorization grants/work
+      assignments/service eligibility and location offerings.
+- [x] Represent effective-dated weekly schedules, closed days, split shifts,
+      transactionally replaced immutable date overrides, explicit staff
+      inherit/custom/unconfigured modes and authorized staff unavailability
+      without generated slot rows.
+- [x] Add booking/line/guest/event snapshot schemas for the approved lifecycle,
+      ordered skipped-line history, UTC instants, local dates, IANA timezones and
+      integer KES quotes.
+- [x] Keep booking persistence read-only in Phase 4.1 and block generic model
+      mutation paths until invariant-preserving Phase 4.2 commands exist.
+- [x] Add schedule-guard, staff-day-lock and idempotency-receipt storage contracts
+      for the Phase 4.2 command engine.
+- [x] Add tenant-scoped configuration repositories, booking read/count
+      repositories, transactional schedule successors, UTC-day lock and
+      idempotency receipt primitives, plus real-Mongo isolation/race/migration
+      and winning-query-plan evidence.
+
+### Phase 4.2–4.4 — Availability, API and experiences
 
 - [ ] Implement service catalogue APIs.
 - [ ] Implement location, staff schedule, leave, service-duration and existing

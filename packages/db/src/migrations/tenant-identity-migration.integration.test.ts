@@ -33,12 +33,20 @@ describe.skipIf(uri === undefined)("tenant identity migration", () => {
       );
 
     await expect(runMigrations(database, migrations)).resolves.toEqual({
-      applied: ["0001_create_tenant_identity_collections", "0002_add_auth_tenancy_rbac"],
+      applied: [
+        "0001_create_tenant_identity_collections",
+        "0002_add_auth_tenancy_rbac",
+        "0003_add_booking_domain_foundation"
+      ],
       skipped: []
     });
     await expect(runMigrations(database, migrations)).resolves.toEqual({
       applied: [],
-      skipped: ["0001_create_tenant_identity_collections", "0002_add_auth_tenancy_rbac"]
+      skipped: [
+        "0001_create_tenant_identity_collections",
+        "0002_add_auth_tenancy_rbac",
+        "0003_add_booking_domain_foundation"
+      ]
     });
 
     const collections = new Set(
