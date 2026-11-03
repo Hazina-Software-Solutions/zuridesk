@@ -11,6 +11,7 @@
     "test": "vitest run --exclude '**/*.integration.test.ts'",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "generate:openapi": "tsx scripts/write-openapi.ts",
+    "seed:demo": "node ../../scripts/run-with-root-env.mjs tsx scripts/seed-demo.ts",
     "check:openapi": "tsx scripts/write-openapi.ts --check"
   },
   "dependencies": {

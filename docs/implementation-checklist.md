@@ -43,6 +43,8 @@
 - [x] Add the first versioned business-schema migration and rollback note.
 - [x] Add business-specific global and tenant-scoped repositories.
 - [x] Add seed fixtures for two tenants and their memberships.
+- [x] Add a versioned, reusable development demo seed with safe local login
+      personas and Phase 4 salon configuration.
 - [x] Prove tenant isolation across every tenant-owned repository operation.
 - [x] Add TTL behavior for expired invites with its documented index-policy
       exception.

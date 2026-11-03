@@ -35,6 +35,7 @@ pnpm build
 pnpm db:migration:status
 pnpm db:migrate
 pnpm db:seed
+pnpm db:seed:demo
 ```
 
 See [Phase 2.2 tenant identity and locations](docs/database/phase-2.2-tenant-identity.md)
@@ -46,3 +47,8 @@ Phase 3 requires migration `0002_add_auth_tenancy_rbac`; see its
 [operations runbook](docs/runbooks/phase-3-auth-operations.md). Development/test
 email capture is opt-in. Production delivery remains unconfigured and fails
 closed.
+
+For reusable local owner, manager, receptionist and stylist accounts plus
+synthetic salon configuration, see
+[development demo data](docs/setup/development-demo-data.md). The shared local
+password is supplied through `.env.local` and is never committed or printed.

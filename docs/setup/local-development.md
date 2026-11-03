@@ -51,6 +51,17 @@ pnpm test:integration
 pnpm build
 ```
 
+For reusable local login personas and salon configuration, run the development
+demo seed after migrations:
+
+```bash
+pnpm db:migrate
+pnpm db:seed:demo
+```
+
+See [development demo data](development-demo-data.md) for the required safety
+flags, local password handling, persona emails and extension rules.
+
 Target a workspace only when debugging:
 
 ```bash
