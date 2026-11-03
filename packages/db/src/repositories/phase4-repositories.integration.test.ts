@@ -208,6 +208,67 @@ describe.skipIf(uri === undefined)("Phase 4.1 tenant repositories", () => {
     expect("save" in listed[0]!).toBe(false);
   });
 
+  it("updates and archives an unattached service without dependency guards", async () => {
+    const service = await serviceCatalogueRepository.create(contextA, { name: "Unattached" });
+    await expect(
+      serviceCatalogueRepository.update(contextA, service.id as string, { name: "Renamed" })
+    ).resolves.toMatchObject({ name: "Renamed", status: "active" });
+    await expect(
+      serviceCatalogueRepository.archive(contextA, service.id as string)
+    ).resolves.toMatchObject({ name: "Renamed", status: "archived" });
+  });
+
+  it("serializes first-offering creation with service update and archive", async () => {
+    const service = await serviceCatalogueRepository.create(contextA, { name: "First offering" });
+    let releasePreflight!: () => void;
+    let signalPreflight!: () => void;
+    const preflightReached = new Promise<void>((resolve) => {
+      signalPreflight = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releasePreflight = resolve;
+    });
+    const configure = bookingConfigurationRepository.configureOffering(
+      contextA,
+      {
+        serviceId: service.id as string,
+        locationId: locationAId,
+        durationMinutes: 60,
+        bufferBeforeMinutes: 0,
+        bufferAfterMinutes: 0,
+        quotedPriceMinor: 100000,
+        slotIncrementMinutes: 15,
+        minAdvanceMinutes: 0,
+        maxAdvanceDays: 30
+      },
+      {
+        afterPreflight: async () => {
+          signalPreflight();
+          await release;
+        }
+      }
+    );
+    await preflightReached;
+    await serviceCatalogueRepository.update(contextA, service.id as string, {
+      name: "Updated before offering"
+    });
+    await serviceCatalogueRepository.archive(contextA, service.id as string);
+    releasePreflight();
+
+    await expect(configure).rejects.toThrow(
+      "serviceId must identify an active service in the current tenant"
+    );
+    expect(
+      await ServiceLocationOfferingModel.countDocuments({
+        tenantId: new Types.ObjectId(tenantAId),
+        serviceId: new Types.ObjectId(service.id as string)
+      })
+    ).toBe(0);
+    await expect(
+      serviceCatalogueRepository.findById(contextA, service.id as string)
+    ).resolves.toBeNull();
+  });
+
   it("atomically closes the open weekly schedule and admits one concurrent successor", async () => {
     await expect(
       bookingScheduleRepository.createWeeklyScheduleSuccessor(contextA, {

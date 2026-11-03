@@ -1,5 +1,11 @@
 export type DatabaseCommandErrorCode =
-  "CONFLICT" | "INVALID_CREDENTIAL" | "NOT_FOUND" | "FORBIDDEN" | "LAST_OWNER" | "RATE_LIMITED";
+  | "CONFLICT"
+  | "CONFIGURATION_CHANGED"
+  | "INVALID_CREDENTIAL"
+  | "NOT_FOUND"
+  | "FORBIDDEN"
+  | "LAST_OWNER"
+  | "RATE_LIMITED";
 
 export class DatabaseCommandError extends Error {
   constructor(readonly code: DatabaseCommandErrorCode) {

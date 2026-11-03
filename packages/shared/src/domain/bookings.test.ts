@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   bookingLineSnapshotSchema,
+  bookingRescheduleReasonSchema,
+  confirmBookingCommandSchema,
+  createBookingCommandSchema,
   guestSnapshotSchema,
   localDateSchema,
   scheduleIntervalsSchema,
@@ -97,5 +100,38 @@ describe("booking domain contracts", () => {
       serviceOfferingInputSchema.parse({ ...offering, slotIncrementMinutes: 7 })
     ).toThrow("divide a 24-hour day");
     expect(() => serviceOfferingInputSchema.parse({ ...offering, surprise: true })).toThrow();
+  });
+
+  it("keeps command clocks and commercial snapshots out of client input", () => {
+    const base = {
+      idempotencyKey: "booking-command-0001",
+      locationId: "507f1f77bcf86cd799439011",
+      source: "appointment" as const,
+      guest: { kind: "named" as const, displayName: "Guest", customerId: null },
+      selections: [
+        {
+          serviceId: "507f1f77bcf86cd799439012",
+          assignedStaffProfileId: "507f1f77bcf86cd799439013"
+        }
+      ],
+      startsAt: new Date("2026-11-10T06:00:00.000Z")
+    };
+    expect(createBookingCommandSchema.parse(base).status).toBe("confirmed");
+    expect(() => createBookingCommandSchema.parse({ ...base, durationMinutes: 60 })).toThrow();
+    expect(() =>
+      createBookingCommandSchema.parse({ ...base, source: "walk_in", startsAt: new Date() })
+    ).toThrow("derive startsAt");
+    expect(() =>
+      confirmBookingCommandSchema.parse({
+        bookingId: "507f1f77bcf86cd799439014",
+        expectedVersion: -1,
+        idempotencyKey: "booking-command-0002"
+      })
+    ).toThrow();
+  });
+
+  it("uses a bounded reschedule reason vocabulary", () => {
+    expect(bookingRescheduleReasonSchema.parse("guest_request")).toBe("guest_request");
+    expect(() => bookingRescheduleReasonSchema.parse("because I said so")).toThrow();
   });
 });

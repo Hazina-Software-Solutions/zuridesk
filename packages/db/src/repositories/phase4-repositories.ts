@@ -41,6 +41,10 @@ import {
   WeeklyScheduleVersionModel
 } from "../models/phase4-models";
 import { boundedLimit, toObjectId } from "./repository-helpers";
+import {
+  guardedConfigurationMutation,
+  type ScheduleGuardIdentity as ConfigurationGuardIdentity
+} from "./phase4-guard";
 
 export type Phase41Record = Readonly<Record<string, unknown>>;
 
@@ -82,11 +86,14 @@ function record(value: unknown): Phase41Record {
 
 async function requireLocation(
   tenantId: Types.ObjectId,
-  locationId: string
+  locationId: string,
+  session?: ClientSession
 ): Promise<Types.ObjectId> {
   const id = toObjectId(locationId, "locationId");
   if (
-    (await LocationModel.exists({ _id: id, tenantId, status: "active", deletedAt: null })) === null
+    (await LocationModel.exists({ _id: id, tenantId, status: "active", deletedAt: null }).session(
+      session ?? null
+    )) === null
   ) {
     throw new Error("locationId must identify an active location in the current tenant");
   }
@@ -95,10 +102,15 @@ async function requireLocation(
 
 async function requireProfile(
   tenantId: Types.ObjectId,
-  profileId: string
+  profileId: string,
+  session?: ClientSession
 ): Promise<Types.ObjectId> {
   const id = toObjectId(profileId, "staffProfileId");
-  if ((await StaffBookingProfileModel.exists({ _id: id, tenantId, status: "active" })) === null) {
+  if (
+    (await StaffBookingProfileModel.exists({ _id: id, tenantId, status: "active" }).session(
+      session ?? null
+    )) === null
+  ) {
     throw new Error("staffProfileId must identify an active profile in the current tenant");
   }
   return id;
@@ -106,13 +118,76 @@ async function requireProfile(
 
 async function requireService(
   tenantId: Types.ObjectId,
-  serviceId: string
+  serviceId: string,
+  session?: ClientSession
 ): Promise<Types.ObjectId> {
   const id = toObjectId(serviceId, "serviceId");
-  if ((await ServiceModel.exists({ _id: id, tenantId, status: "active" })) === null) {
+  if (
+    (await ServiceModel.exists({ _id: id, tenantId, status: "active" }).session(
+      session ?? null
+    )) === null
+  ) {
     throw new Error("serviceId must identify an active service in the current tenant");
   }
   return id;
+}
+
+async function serializeServiceConfiguration(
+  tenantId: Types.ObjectId,
+  serviceId: Types.ObjectId,
+  session: ClientSession,
+  requireActive: boolean
+): Promise<void> {
+  const service = await ServiceModel.findOneAndUpdate(
+    {
+      _id: serviceId,
+      tenantId,
+      ...(requireActive ? { status: "active" } : {})
+    },
+    { $currentDate: { updatedAt: true } },
+    { returnDocument: "after", runValidators: true, session }
+  );
+  if (service === null) {
+    throw new Error("serviceId must identify an active service in the current tenant");
+  }
+}
+
+async function locationAndStaffGuards(
+  tenantId: Types.ObjectId,
+  locationIds: readonly Types.ObjectId[],
+  staffIds: readonly Types.ObjectId[] = []
+): Promise<readonly ConfigurationGuardIdentity[]> {
+  const assigned = await StaffLocationAssignmentModel.find({
+    tenantId,
+    locationId: { $in: locationIds },
+    status: "active"
+  }).select({ staffProfileId: 1 });
+  return [
+    ...locationIds.map((scopeId) => ({ scopeType: "location" as const, scopeId })),
+    ...[...staffIds, ...assigned.map(({ staffProfileId }) => staffProfileId)].map((scopeId) => ({
+      scopeType: "staff" as const,
+      scopeId
+    }))
+  ];
+}
+
+async function serviceAffectedGuards(
+  tenantId: Types.ObjectId,
+  serviceId: Types.ObjectId
+): Promise<readonly ConfigurationGuardIdentity[]> {
+  const [offerings, eligibility] = await Promise.all([
+    ServiceLocationOfferingModel.find({ tenantId, serviceId, status: "active" }).select({
+      locationId: 1
+    }),
+    StaffServiceEligibilityModel.find({ tenantId, serviceId, status: "active" }).select({
+      staffProfileId: 1
+    })
+  ]);
+  return locationAndStaffGuards(
+    tenantId,
+    offerings.map(({ locationId }) => locationId),
+    eligibility.map(({ staffProfileId }) => staffProfileId)
+  );
 }
 
 export const serviceCatalogueRepository = {
@@ -167,32 +242,38 @@ export const serviceCatalogueRepository = {
   ): Promise<Phase41Record | null> {
     const { tenantId } = contextIds(context);
     const parsed = serviceUpdateInputSchema.parse(patch);
-    const document = await ServiceModel.findOne({
-      _id: toObjectId(id),
-      tenantId,
-      status: "active"
+    const serviceId = toObjectId(id);
+    const guards = await serviceAffectedGuards(tenantId, serviceId);
+    return guardedConfigurationMutation(tenantId, guards, async (session) => {
+      const document = await ServiceModel.findOne({
+        _id: serviceId,
+        tenantId,
+        status: "active"
+      }).session(session);
+      if (document === null) return null;
+      if (parsed.name !== undefined) document.name = parsed.name;
+      if (parsed.description !== undefined) document.description = parsed.description;
+      await document.save({ session });
+      return record(document);
     });
-    if (document === null) return null;
-    if (parsed.name !== undefined) document.name = parsed.name;
-    if (parsed.description !== undefined) {
-      document.description = parsed.description;
-    }
-    await document.save();
-    return record(document);
   },
 
   async archive(context: TrustedTenantContext, id: string): Promise<Phase41Record | null> {
     const { tenantId } = contextIds(context);
-    const document = await ServiceModel.findOne({
-      _id: toObjectId(id),
-      tenantId,
-      status: "active"
+    const serviceId = toObjectId(id);
+    const guards = await serviceAffectedGuards(tenantId, serviceId);
+    return guardedConfigurationMutation(tenantId, guards, async (session) => {
+      const document = await ServiceModel.findOne({
+        _id: serviceId,
+        tenantId,
+        status: "active"
+      }).session(session);
+      if (document === null) return null;
+      document.status = "archived";
+      document.archivedAt = new Date();
+      await document.save({ session });
+      return record(document);
     });
-    if (document === null) return null;
-    document.status = "archived";
-    document.archivedAt = new Date();
-    await document.save();
-    return record(document);
   }
 };
 
@@ -234,15 +315,22 @@ export const staffBookingProfileRepository = {
   ): Promise<Phase41Record | null> {
     const { tenantId } = contextIds(context);
     const scheduleMode = staffScheduleModeSchema.parse(mode);
-    const document = await StaffBookingProfileModel.findOne({
-      _id: toObjectId(id),
+    const profileId = toObjectId(id);
+    return guardedConfigurationMutation(
       tenantId,
-      status: "active"
-    });
-    if (document === null) return null;
-    document.scheduleMode = scheduleMode;
-    await document.save();
-    return record(document);
+      [{ scopeType: "staff", scopeId: profileId }],
+      async (session) => {
+        const document = await StaffBookingProfileModel.findOne({
+          _id: profileId,
+          tenantId,
+          status: "active"
+        }).session(session);
+        if (document === null) return null;
+        document.scheduleMode = scheduleMode;
+        await document.save({ session });
+        return record(document);
+      }
+    );
   },
 
   async findByMembership(
@@ -260,16 +348,23 @@ export const staffBookingProfileRepository = {
 
   async archive(context: TrustedTenantContext, id: string): Promise<Phase41Record | null> {
     const { tenantId } = contextIds(context);
-    const document = await StaffBookingProfileModel.findOne({
-      _id: toObjectId(id),
+    const profileId = toObjectId(id);
+    return guardedConfigurationMutation(
       tenantId,
-      status: "active"
-    });
-    if (document === null) return null;
-    document.status = "archived";
-    document.archivedAt = new Date();
-    await document.save();
-    return record(document);
+      [{ scopeType: "staff", scopeId: profileId }],
+      async (session) => {
+        const document = await StaffBookingProfileModel.findOne({
+          _id: profileId,
+          tenantId,
+          status: "active"
+        }).session(session);
+        if (document === null) return null;
+        document.status = "archived";
+        document.archivedAt = new Date();
+        await document.save({ session });
+        return record(document);
+      }
+    );
   }
 };
 
@@ -326,12 +421,23 @@ export const bookingConfigurationRepository = {
     const parsed = staffLocationInputSchema.parse(input);
     const staffProfileId = await requireProfile(tenantId, parsed.staffProfileId);
     const locationId = await requireLocation(tenantId, parsed.locationId);
-    const document = await StaffLocationAssignmentModel.findOneAndUpdate(
-      { tenantId, staffProfileId, locationId },
-      { $set: { status: "active", archivedAt: null }, $setOnInsert: { schemaVersion: 1 } },
-      { upsert: true, new: true, runValidators: true }
+    return guardedConfigurationMutation(
+      tenantId,
+      [
+        { scopeType: "location", scopeId: locationId },
+        { scopeType: "staff", scopeId: staffProfileId }
+      ],
+      async (session) => {
+        await requireProfile(tenantId, parsed.staffProfileId, session);
+        await requireLocation(tenantId, parsed.locationId, session);
+        const document = await StaffLocationAssignmentModel.findOneAndUpdate(
+          { tenantId, staffProfileId, locationId },
+          { $set: { status: "active", archivedAt: null }, $setOnInsert: { schemaVersion: 1 } },
+          { upsert: true, new: true, runValidators: true, session }
+        );
+        return record(document);
+      }
     );
-    return record(document);
   },
 
   async setServiceEligibility(
@@ -342,12 +448,28 @@ export const bookingConfigurationRepository = {
     const parsed = staffServiceInputSchema.parse(input);
     const staffProfileId = await requireProfile(tenantId, parsed.staffProfileId);
     const serviceId = await requireService(tenantId, parsed.serviceId);
-    const document = await StaffServiceEligibilityModel.findOneAndUpdate(
-      { tenantId, staffProfileId, serviceId },
-      { $set: { status: "active", archivedAt: null }, $setOnInsert: { schemaVersion: 1 } },
-      { upsert: true, new: true, runValidators: true }
-    );
-    return record(document);
+    const assignments = await StaffLocationAssignmentModel.find({
+      tenantId,
+      staffProfileId,
+      status: "active"
+    }).select({ locationId: 1 });
+    const guards: ConfigurationGuardIdentity[] = [
+      { scopeType: "staff", scopeId: staffProfileId },
+      ...assignments.map(({ locationId }) => ({
+        scopeType: "location" as const,
+        scopeId: locationId
+      }))
+    ];
+    return guardedConfigurationMutation(tenantId, guards, async (session) => {
+      await requireProfile(tenantId, parsed.staffProfileId, session);
+      await serializeServiceConfiguration(tenantId, serviceId, session, true);
+      const document = await StaffServiceEligibilityModel.findOneAndUpdate(
+        { tenantId, staffProfileId, serviceId },
+        { $set: { status: "active", archivedAt: null }, $setOnInsert: { schemaVersion: 1 } },
+        { upsert: true, new: true, runValidators: true, session }
+      );
+      return record(document);
+    });
   },
 
   async configureOffering(
@@ -362,31 +484,38 @@ export const bookingConfigurationRepository = {
       slotIncrementMinutes: number;
       minAdvanceMinutes: number;
       maxAdvanceDays: number;
-    }
+    },
+    options: { afterPreflight?: () => Promise<void> } = {}
   ): Promise<Phase41Record> {
     const { tenantId } = contextIds(context);
     const parsed = serviceOfferingInputSchema.parse(input);
     const serviceId = await requireService(tenantId, parsed.serviceId);
     const locationId = await requireLocation(tenantId, parsed.locationId);
-    const document = await ServiceLocationOfferingModel.findOneAndUpdate(
-      { tenantId, serviceId, locationId },
-      {
-        $set: {
-          durationMinutes: parsed.durationMinutes,
-          bufferBeforeMinutes: parsed.bufferBeforeMinutes,
-          bufferAfterMinutes: parsed.bufferAfterMinutes,
-          quotedPriceMinor: parsed.quotedPriceMinor,
-          slotIncrementMinutes: parsed.slotIncrementMinutes,
-          minAdvanceMinutes: parsed.minAdvanceMinutes,
-          maxAdvanceDays: parsed.maxAdvanceDays,
-          status: "active",
-          archivedAt: null
+    await options.afterPreflight?.();
+    const guards = await locationAndStaffGuards(tenantId, [locationId]);
+    return guardedConfigurationMutation(tenantId, guards, async (session) => {
+      await serializeServiceConfiguration(tenantId, serviceId, session, true);
+      await requireLocation(tenantId, parsed.locationId, session);
+      const document = await ServiceLocationOfferingModel.findOneAndUpdate(
+        { tenantId, serviceId, locationId },
+        {
+          $set: {
+            durationMinutes: parsed.durationMinutes,
+            bufferBeforeMinutes: parsed.bufferBeforeMinutes,
+            bufferAfterMinutes: parsed.bufferAfterMinutes,
+            quotedPriceMinor: parsed.quotedPriceMinor,
+            slotIncrementMinutes: parsed.slotIncrementMinutes,
+            minAdvanceMinutes: parsed.minAdvanceMinutes,
+            maxAdvanceDays: parsed.maxAdvanceDays,
+            status: "active",
+            archivedAt: null
+          },
+          $setOnInsert: { schemaVersion: 1 }
         },
-        $setOnInsert: { schemaVersion: 1 }
-      },
-      { upsert: true, new: true, runValidators: true }
-    );
-    return record(document);
+        { upsert: true, new: true, runValidators: true, session }
+      );
+      return record(document);
+    });
   },
 
   async listOfferings(
@@ -411,17 +540,23 @@ export const bookingConfigurationRepository = {
   ): Promise<Phase41Record | null> {
     const { tenantId } = contextIds(context);
     const parsed = staffLocationInputSchema.parse(input);
-    const document = await StaffLocationAssignmentModel.findOneAndUpdate(
-      {
-        tenantId,
-        staffProfileId: toObjectId(parsed.staffProfileId),
-        locationId: toObjectId(parsed.locationId),
-        status: "active"
-      },
-      { $set: { status: "archived", archivedAt: new Date() } },
-      { new: true, runValidators: true }
+    const staffProfileId = toObjectId(parsed.staffProfileId);
+    const locationId = toObjectId(parsed.locationId);
+    return guardedConfigurationMutation(
+      tenantId,
+      [
+        { scopeType: "location", scopeId: locationId },
+        { scopeType: "staff", scopeId: staffProfileId }
+      ],
+      async (session) => {
+        const document = await StaffLocationAssignmentModel.findOneAndUpdate(
+          { tenantId, staffProfileId, locationId, status: "active" },
+          { $set: { status: "archived", archivedAt: new Date() } },
+          { new: true, runValidators: true, session }
+        );
+        return document === null ? null : record(document);
+      }
     );
-    return document === null ? null : record(document);
   },
 
   async archiveServiceEligibility(
@@ -430,17 +565,29 @@ export const bookingConfigurationRepository = {
   ): Promise<Phase41Record | null> {
     const { tenantId } = contextIds(context);
     const parsed = staffServiceInputSchema.parse(input);
-    const document = await StaffServiceEligibilityModel.findOneAndUpdate(
-      {
-        tenantId,
-        staffProfileId: toObjectId(parsed.staffProfileId),
-        serviceId: toObjectId(parsed.serviceId),
-        status: "active"
-      },
-      { $set: { status: "archived", archivedAt: new Date() } },
-      { new: true, runValidators: true }
-    );
-    return document === null ? null : record(document);
+    const staffProfileId = toObjectId(parsed.staffProfileId);
+    const serviceId = toObjectId(parsed.serviceId);
+    const assignments = await StaffLocationAssignmentModel.find({
+      tenantId,
+      staffProfileId,
+      status: "active"
+    }).select({ locationId: 1 });
+    const guards: ConfigurationGuardIdentity[] = [
+      { scopeType: "staff", scopeId: staffProfileId },
+      ...assignments.map(({ locationId }) => ({
+        scopeType: "location" as const,
+        scopeId: locationId
+      }))
+    ];
+    return guardedConfigurationMutation(tenantId, guards, async (session) => {
+      await serializeServiceConfiguration(tenantId, serviceId, session, false);
+      const document = await StaffServiceEligibilityModel.findOneAndUpdate(
+        { tenantId, staffProfileId, serviceId, status: "active" },
+        { $set: { status: "archived", archivedAt: new Date() } },
+        { new: true, runValidators: true, session }
+      );
+      return document === null ? null : record(document);
+    });
   },
 
   async archiveOffering(
@@ -451,17 +598,18 @@ export const bookingConfigurationRepository = {
     const parsed = serviceOfferingInputSchema
       .pick({ serviceId: true, locationId: true })
       .parse(input);
-    const document = await ServiceLocationOfferingModel.findOneAndUpdate(
-      {
-        tenantId,
-        serviceId: toObjectId(parsed.serviceId),
-        locationId: toObjectId(parsed.locationId),
-        status: "active"
-      },
-      { $set: { status: "archived", archivedAt: new Date() } },
-      { new: true, runValidators: true }
-    );
-    return document === null ? null : record(document);
+    const serviceId = toObjectId(parsed.serviceId);
+    const locationId = toObjectId(parsed.locationId);
+    const guards = await locationAndStaffGuards(tenantId, [locationId]);
+    return guardedConfigurationMutation(tenantId, guards, async (session) => {
+      await serializeServiceConfiguration(tenantId, serviceId, session, false);
+      const document = await ServiceLocationOfferingModel.findOneAndUpdate(
+        { tenantId, serviceId, locationId, status: "active" },
+        { $set: { status: "archived", archivedAt: new Date() } },
+        { new: true, runValidators: true, session }
+      );
+      return document === null ? null : record(document);
+    });
   }
 };
 
@@ -818,17 +966,30 @@ export const bookingScheduleRepository = {
     const { tenantId, userId } = contextIds(context);
     const parsed = unavailabilityInputSchema.parse(input);
     const staffProfileId = await requireProfile(tenantId, parsed.staffProfileId);
-    const document = await StaffUnavailabilityModel.create({
-      schemaVersion: 1,
+    return guardedConfigurationMutation(
       tenantId,
-      staffProfileId,
-      startsAt: parsed.startsAt,
-      endsAt: parsed.endsAt,
-      reasonCode: parsed.reasonCode,
-      authorizedByUserId: userId,
-      archivedAt: null
-    });
-    return record(document);
+      [{ scopeType: "staff", scopeId: staffProfileId }],
+      async (session) => {
+        await requireProfile(tenantId, parsed.staffProfileId, session);
+        const [document] = await StaffUnavailabilityModel.create(
+          [
+            {
+              schemaVersion: 1,
+              tenantId,
+              staffProfileId,
+              startsAt: parsed.startsAt,
+              endsAt: parsed.endsAt,
+              reasonCode: parsed.reasonCode,
+              authorizedByUserId: userId,
+              archivedAt: null
+            }
+          ],
+          { session }
+        );
+        if (document === undefined) throw new Error("Unavailability creation failed");
+        return record(document);
+      }
+    );
   },
 
   async archiveDateOverride(
@@ -885,12 +1046,30 @@ export const bookingScheduleRepository = {
     id: string
   ): Promise<Phase41Record | null> {
     const { tenantId } = contextIds(context);
-    const document = await StaffUnavailabilityModel.findOneAndUpdate(
-      { _id: toObjectId(id), tenantId, archivedAt: null },
-      { $set: { archivedAt: new Date() } },
-      { new: true, runValidators: true }
+    const unavailabilityId = toObjectId(id);
+    const observed = await StaffUnavailabilityModel.findOne({
+      _id: unavailabilityId,
+      tenantId,
+      archivedAt: null
+    }).select({ staffProfileId: 1 });
+    if (observed === null) return null;
+    return guardedConfigurationMutation(
+      tenantId,
+      [{ scopeType: "staff", scopeId: observed.staffProfileId }],
+      async (session) => {
+        const document = await StaffUnavailabilityModel.findOneAndUpdate(
+          {
+            _id: unavailabilityId,
+            tenantId,
+            staffProfileId: observed.staffProfileId,
+            archivedAt: null
+          },
+          { $set: { archivedAt: new Date() } },
+          { new: true, runValidators: true, session }
+        );
+        return document === null ? null : record(document);
+      }
     );
-    return document === null ? null : record(document);
   }
 };
 

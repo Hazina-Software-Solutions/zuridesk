@@ -24,7 +24,7 @@
 | 1. Foundation                | Complete for local/CI development | Monorepo, applications, API boundary, MongoDB connection, CI, environment and security baselines                                      |
 | 2. Data layer                | In progress                       | Shared foundations plus tenant, location, user, membership and invite persistence are complete; later business domains remain pending |
 | 3. Auth, tenancy and RBAC    | Complete for local/CI development | Email/password auth, rotating sessions, tenant selection, invites, RBAC, web/Expo shells, and real MongoDB HTTP coverage              |
-| 4. Bookings                  | Foundation in progress            | Phase 4.1 domain/data foundation exists; availability, booking commands, APIs and screens remain pending                              |
+| 4. Bookings                  | Domain implementation in progress | Phase 4.1 foundation and Phase 4.2 computed availability/create/confirm/reschedule commands exist; APIs and screens remain pending    |
 | 5. Staff and customers       | Not started                       | No staff/customer APIs or product screens                                                                                             |
 | 6. Stock and POS             | Not started                       | No inventory ledger, checkout or sales reports                                                                                        |
 | 7. Subscriptions and billing | Not started                       | No plan enforcement, subscription lifecycle or M-Pesa integration                                                                     |
@@ -222,14 +222,24 @@ Phase 2 domain collections below are not implied by Phase 2.2 completion.
 ### Phase 4.2–4.4 — Availability, API and experiences
 
 - [ ] Implement service catalogue APIs.
-- [ ] Implement location, staff schedule, leave, service-duration and existing
+- [x] Implement location, staff schedule, leave, service-duration and existing
       booking availability calculations.
-- [ ] Implement per-service-line staff assignment.
-- [ ] Implement walk-in and pre-booked appointments.
+      Direct Phase 4.2 command tests cover inherited location hours, date
+      overrides and leave subtraction; custom/unconfigured/closed/effective
+      schedule variants, advance-window rejection, `in_progress` blocking and
+      DST-date commands still require acceptance coverage before Phase 4.3 API
+      exposure.
+- [x] Implement per-service-line staff assignment in the domain command layer.
+- [x] Implement authoritative domain commands for walk-in and pre-booked
+      appointment creation.
 - [ ] Implement `pending`, `confirmed`, `in_progress`, `completed`, `no_show`,
-      and `cancelled` transitions with explicit transition rules.
-- [ ] Implement staff-day locks and transactional overlap checks.
-- [ ] Add concurrent booking tests proving double-booking is impossible.
+      and `cancelled` transitions with explicit transition rules. Phase 4.2
+      implements create-as-pending/confirmed, pending confirmation and
+      pending/confirmed rescheduling; the remaining transitions are Phase 4.3.
+- [x] Implement staff-day locks and transactional exact overlap checks for
+      confirmed creation, confirmation and rescheduling.
+- [x] Add real-Mongo concurrent booking tests proving one winner for same-staff
+      and cross-location conflicts.
 - [ ] Add web calendar and booking-management screens.
 - [ ] Add owner, manager, receptionist and stylist mobile booking screens.
 - [ ] Add an offline booking mutation queue, retry behavior and visible conflict

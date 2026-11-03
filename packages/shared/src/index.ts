@@ -35,6 +35,18 @@ export {
   bookingLineStatusSchema,
   bookingEventTypeSchema,
   bookingStatusSchema,
+  bookingSelectionSchema,
+  bookingSelectionsSchema,
+  availabilityQuerySchema,
+  availabilityReasonSchema,
+  availabilityLineSchema,
+  availabilitySlotSchema,
+  availabilityResultSchema,
+  createBookingCommandSchema,
+  confirmBookingCommandSchema,
+  bookingRescheduleReasonSchema,
+  rescheduleBookingCommandSchema,
+  bookingCommandResultSchema,
   bufferedOccupancyInputSchema,
   dateOverrideInputSchema,
   dateOverrideIdentitySchema,
@@ -65,7 +77,16 @@ export {
   type ScheduleInterval,
   type ScheduleOwnerType,
   type StaffScheduleMode,
-  type WeeklySchedule
+  type WeeklySchedule,
+  type BookingSelection,
+  type AvailabilityQuery,
+  type AvailabilityResult,
+  type AvailabilitySlot,
+  type CreateBookingCommand,
+  type ConfirmBookingCommand,
+  type RescheduleBookingCommand,
+  type BookingCommandResult,
+  type BookingRescheduleReason
 } from "./domain/bookings";
 export { objectIdSchema, type ObjectIdString } from "./ids";
 export {

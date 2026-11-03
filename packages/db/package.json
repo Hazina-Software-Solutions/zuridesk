@@ -17,6 +17,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@js-temporal/polyfill": "0.5.1",
     "@zuridesk/shared": "workspace:*",
     "mongoose": "9.10.4"
   },

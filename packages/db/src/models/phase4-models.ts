@@ -647,8 +647,11 @@ bookingSchema.pre("validate", function (this: HydratedDocument<BookingDocument>)
     skippedReasonCode: line.skippedReasonCode
   }));
   lines.forEach((line) => bookingLineSnapshotSchema.parse(line));
-  if (this.localDate !== localDateInTimezone(this.startsAt, this.timezone)) {
-    throw new Error("Booking localDate must derive from startsAt in the booking timezone");
+  const firstTreatmentStartsAt = lines[0]!.startsAt;
+  if (this.localDate !== localDateInTimezone(firstTreatmentStartsAt, this.timezone)) {
+    throw new Error(
+      "Booking localDate must derive from the first treatment line start in the booking timezone"
+    );
   }
   for (let index = 0; index < lines.length; index += 1) {
     if (lines[index]!.order !== index) throw new Error("Booking line order must be contiguous");
@@ -684,15 +687,13 @@ bookingSchema.pre("validate", function (this: HydratedDocument<BookingDocument>)
 bookingSchema.pre("save", function (this: HydratedDocument<BookingDocument>) {
   if (!this.isNew) {
     throw new Error(
-      "Existing booking document saves are forbidden until Phase 4.2 invariant-preserving commands exist"
+      "Existing booking document saves are forbidden; use an invariant-preserving command"
     );
   }
 });
 for (const operation of ["updateOne", "updateMany", "findOneAndUpdate"] as const) {
   bookingSchema.pre(operation, function () {
-    throw new Error(
-      "Generic booking updates are forbidden until Phase 4.2 invariant-preserving commands exist"
-    );
+    throw new Error("Generic booking updates are forbidden; use an invariant-preserving command");
   });
 }
 for (const operation of ["replaceOne", "findOneAndReplace"] as const) {
@@ -994,9 +995,7 @@ export const BookingModel =
   (mongoose.models.Booking as Model<BookingDocument> | undefined) ??
   mongoose.model<BookingDocument>("Booking", bookingSchema);
 BookingModel.bulkSave = () =>
-  Promise.reject(
-    new Error("Booking bulkSave is forbidden until Phase 4.2 invariant-preserving commands exist")
-  );
+  Promise.reject(new Error("Booking bulkSave is forbidden; use an invariant-preserving command"));
 export const BookingEventModel =
   (mongoose.models.BookingEvent as Model<BookingEventDocument> | undefined) ??
   mongoose.model<BookingEventDocument>("BookingEvent", bookingEventSchema);
