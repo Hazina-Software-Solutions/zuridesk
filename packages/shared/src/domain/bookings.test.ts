@@ -3,12 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   bookingLineSnapshotSchema,
   bookingRescheduleReasonSchema,
+  cancelBookingCommandSchema,
+  completeBookingCommandSchema,
   confirmBookingCommandSchema,
   createBookingCommandSchema,
   guestSnapshotSchema,
   localDateSchema,
+  markBookingNoShowCommandSchema,
   scheduleIntervalsSchema,
   serviceOfferingInputSchema,
+  skipBookingLineCommandSchema,
+  startBookingCommandSchema,
   weeklyScheduleSchema
 } from "./bookings";
 
@@ -60,8 +65,8 @@ describe("booking domain contracts", () => {
         bufferBeforeMinutes: 0,
         bufferAfterMinutes: 15,
         quotedPriceMinor: 250000,
-        startsAt: "2026-11-04T06:00:00.000Z",
-        endsAt: "2026-11-04T07:30:00.000Z",
+        startsAt: new Date("2026-11-04T06:00:00.000Z"),
+        endsAt: new Date("2026-11-04T07:30:00.000Z"),
         status: "scheduled",
         skippedReasonCode: null
       })
@@ -133,5 +138,31 @@ describe("booking domain contracts", () => {
   it("uses a bounded reschedule reason vocabulary", () => {
     expect(bookingRescheduleReasonSchema.parse("guest_request")).toBe("guest_request");
     expect(() => bookingRescheduleReasonSchema.parse("because I said so")).toThrow();
+  });
+
+  it("keeps lifecycle transitions versioned, idempotent and reason-bounded", () => {
+    const identity = {
+      bookingId: "507f1f77bcf86cd799439014",
+      expectedVersion: 2,
+      idempotencyKey: "booking-lifecycle-0001"
+    };
+    expect(startBookingCommandSchema.parse(identity)).toEqual(identity);
+    expect(completeBookingCommandSchema.parse(identity)).toEqual(identity);
+    expect(
+      skipBookingLineCommandSchema.parse({
+        ...identity,
+        lineOrder: 1,
+        reasonCode: "guest_declined"
+      })
+    ).toMatchObject({ lineOrder: 1, reasonCode: "guest_declined" });
+    expect(
+      markBookingNoShowCommandSchema.parse({ ...identity, reasonCode: "guest_absent" })
+    ).toMatchObject({ reasonCode: "guest_absent" });
+    expect(
+      cancelBookingCommandSchema.parse({ ...identity, reasonCode: "guest_request" })
+    ).toMatchObject({ reasonCode: "guest_request" });
+    expect(() =>
+      cancelBookingCommandSchema.parse({ ...identity, reasonCode: "free-form excuse" })
+    ).toThrow();
   });
 });

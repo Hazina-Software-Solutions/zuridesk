@@ -4,6 +4,7 @@ import { buildApp } from "./app";
 import { AccessTokenKeys, PurposeKeyRing } from "./auth/crypto";
 import { CaptureDelivery, UnconfiguredDelivery } from "./auth/delivery";
 import { AuthService } from "./auth/service";
+import { BookingService } from "./booking/service";
 import { parseApiEnvironment } from "./config/env";
 
 const environment = parseApiEnvironment(process.env);
@@ -63,6 +64,7 @@ const app = await buildApp({
   checkDatabase: checkDatabaseHealth,
   environment: environment.NODE_ENV,
   authService,
+  bookingService: new BookingService(),
   logger: {
     level: environment.LOG_LEVEL,
     redact: {

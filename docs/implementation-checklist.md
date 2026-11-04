@@ -19,18 +19,18 @@
 
 ## Status at a glance
 
-| Phase                        | Status                            | Current outcome                                                                                                                       |
-| ---------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Foundation                | Complete for local/CI development | Monorepo, applications, API boundary, MongoDB connection, CI, environment and security baselines                                      |
-| 2. Data layer                | In progress                       | Shared foundations plus tenant, location, user, membership and invite persistence are complete; later business domains remain pending |
-| 3. Auth, tenancy and RBAC    | Complete for local/CI development | Email/password auth, rotating sessions, tenant selection, invites, RBAC, web/Expo shells, and real MongoDB HTTP coverage              |
-| 4. Bookings                  | Domain implementation in progress | Phase 4.1 foundation and Phase 4.2 computed availability/create/confirm/reschedule commands exist; APIs and screens remain pending    |
-| 5. Staff and customers       | Not started                       | No staff/customer APIs or product screens                                                                                             |
-| 6. Stock and POS             | Not started                       | No inventory ledger, checkout or sales reports                                                                                        |
-| 7. Subscriptions and billing | Not started                       | No plan enforcement, subscription lifecycle or M-Pesa integration                                                                     |
-| 8. Marketplace               | Not started                       | No public listings, search, orders or fulfilment workflow                                                                             |
-| 9. Notifications and reports | Not started                       | No queue worker, SMS, WhatsApp, push notifications or business reports                                                                |
-| 10. Hardening and release    | Not started                       | No production infrastructure, restore drill, monitoring or store release                                                              |
+| Phase                        | Status                                | Current outcome                                                                                                                       |
+| ---------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Foundation                | Complete for local/CI development     | Monorepo, applications, API boundary, MongoDB connection, CI, environment and security baselines                                      |
+| 2. Data layer                | In progress                           | Shared foundations plus tenant, location, user, membership and invite persistence are complete; later business domains remain pending |
+| 3. Auth, tenancy and RBAC    | Complete for local/CI development     | Email/password auth, rotating sessions, tenant selection, invites, RBAC, web/Expo shells, and real MongoDB HTTP coverage              |
+| 4. Bookings                  | Experience implementation in progress | Phases 4.1–4.3 provide the domain and APIs; Phase 4.4a adds the responsive web diary while mobile/offline work remains pending        |
+| 5. Staff and customers       | Not started                           | No staff/customer APIs or product screens                                                                                             |
+| 6. Stock and POS             | Not started                           | No inventory ledger, checkout or sales reports                                                                                        |
+| 7. Subscriptions and billing | Not started                           | No plan enforcement, subscription lifecycle or M-Pesa integration                                                                     |
+| 8. Marketplace               | Not started                           | No public listings, search, orders or fulfilment workflow                                                                             |
+| 9. Notifications and reports | Not started                           | No queue worker, SMS, WhatsApp, push notifications or business reports                                                                |
+| 10. Hardening and release    | Not started                           | No production infrastructure, restore drill, monitoring or store release                                                              |
 
 ## Completed implementation slice
 
@@ -122,11 +122,11 @@ Phase 2 domain collections below are not implied by Phase 2.2 completion.
 - [x] `users`
 - [x] `memberships`
 - [x] `invites` with a TTL expiry index
-- [ ] `staff_profiles`
-- [ ] `services`
+- [x] `staff_profiles`
+- [x] `services`
 - [ ] `customers`
-- [ ] `bookings` with embedded service-line snapshots
-- [ ] Internal staff-day booking lock collection
+- [x] `bookings` with embedded service-line snapshots
+- [x] Internal staff-day booking lock collection
 - [ ] `products`
 - [ ] `suppliers`
 - [ ] `stock_movements`
@@ -223,30 +223,32 @@ Phase 2 domain collections below are not implied by Phase 2.2 completion.
 
 ### Phase 4.2–4.4 — Availability, API and experiences
 
-- [ ] Implement service catalogue APIs.
+- [x] Implement service catalogue APIs.
 - [x] Implement location, staff schedule, leave, service-duration and existing
       booking availability calculations.
-      Direct Phase 4.2 command tests cover inherited location hours, date
-      overrides and leave subtraction; custom/unconfigured/closed/effective
-      schedule variants, advance-window rejection, `in_progress` blocking and
-      DST-date commands still require acceptance coverage before Phase 4.3 API
-      exposure.
+      Direct command tests cover inherited and custom location/staff hours,
+      overrides, leave, unconfigured and closed schedules, advance windows,
+      `in_progress` blocking, effective versions, and DST gap/fold behavior.
 - [x] Implement per-service-line staff assignment in the domain command layer.
 - [x] Implement authoritative domain commands for walk-in and pre-booked
       appointment creation.
-- [ ] Implement `pending`, `confirmed`, `in_progress`, `completed`, `no_show`,
-      and `cancelled` transitions with explicit transition rules. Phase 4.2
-      implements create-as-pending/confirmed, pending confirmation and
-      pending/confirmed rescheduling; the remaining transitions are Phase 4.3.
+- [x] Implement `pending`, `confirmed`, `in_progress`, `completed`, `no_show`,
+      and `cancelled` transitions with explicit transition rules, ordered
+      per-line start/complete/skip mutations, optimistic versions, idempotency,
+      and immutable events.
 - [x] Implement staff-day locks and transactional exact overlap checks for
       confirmed creation, confirmation and rescheduling.
 - [x] Add real-Mongo concurrent booking tests proving one winner for same-staff
       and cross-location conflicts.
-- [ ] Add web calendar and booking-management screens.
+- [x] Add a responsive web daily diary with location/date selection, live
+      booking rows, detail/lifecycle actions, authoritative availability slot
+      selection, and appointment creation.
 - [ ] Add owner, manager, receptionist and stylist mobile booking screens.
 - [ ] Add an offline booking mutation queue, retry behavior and visible conflict
       resolution on mobile.
-- [ ] Add booking API, RBAC, row-level and tenant-isolation tests.
+- [x] Add booking API, RBAC, row-level and tenant-isolation tests, including
+      location-grant filtering, stylist self-only reads, guest contact masking,
+      and cross-tenant not-found behavior.
 
 ## Phase 5 — Staff and customers
 

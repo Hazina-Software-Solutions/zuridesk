@@ -105,8 +105,8 @@ export const bookingLineSnapshotSchema = z
     bufferBeforeMinutes: safeInteger(0, 240),
     bufferAfterMinutes: safeInteger(0, 240),
     quotedPriceMinor: moneyMinorSchema,
-    startsAt: z.coerce.date(),
-    endsAt: z.coerce.date(),
+    startsAt: z.date(),
+    endsAt: z.date(),
     status: bookingLineStatusSchema,
     skippedReasonCode: z.string().trim().min(1).max(64).nullable()
   })
@@ -315,7 +315,7 @@ export const createBookingCommandSchema = z
     status: z.enum(["pending", "confirmed"]).default("confirmed"),
     guest: guestSnapshotSchema,
     selections: bookingSelectionsSchema,
-    startsAt: z.date().optional()
+    startsAt: z.coerce.date().optional()
   })
   .strict()
   .superRefine((input, context) => {
@@ -353,33 +353,154 @@ export const rescheduleBookingCommandSchema = z
     idempotencyKey: z.string().trim().min(16).max(128),
     reasonCode: bookingRescheduleReasonSchema,
     note: z.string().trim().min(1).max(500).optional(),
-    startsAt: z.date(),
+    startsAt: z.coerce.date(),
     selections: bookingSelectionsSchema
   })
   .strict();
 
-export const bookingCommandResultSchema = z
+export const bookingDtoSchema = z
   .object({
-    replay: z.boolean(),
-    booking: z
-      .object({
-        id: objectIdSchema,
-        locationId: objectIdSchema,
-        localDate: localDateSchema,
-        timezone: boundedText(64),
-        startsAt: z.date(),
-        endsAt: z.date(),
-        status: bookingStatusSchema,
-        version: safeInteger(0, Number.MAX_SAFE_INTEGER),
-        source: z.enum(["appointment", "walk_in"]),
-        guest: guestSnapshotSchema,
-        lines: z.array(bookingLineSnapshotSchema).min(1).max(100)
-      })
-      .strict()
+    id: objectIdSchema,
+    locationId: objectIdSchema,
+    localDate: localDateSchema,
+    timezone: boundedText(64),
+    startsAt: z.date(),
+    endsAt: z.date(),
+    status: bookingStatusSchema,
+    version: safeInteger(0, Number.MAX_SAFE_INTEGER),
+    source: z.enum(["appointment", "walk_in"]),
+    guest: guestSnapshotSchema,
+    lines: z.array(bookingLineSnapshotSchema).min(1).max(100)
   })
   .strict();
 
+export const bookingCommandResultSchema = z
+  .object({ replay: z.boolean(), booking: bookingDtoSchema })
+  .strict();
+
+const bookingMutationIdentity = {
+  bookingId: objectIdSchema,
+  expectedVersion: safeInteger(0, Number.MAX_SAFE_INTEGER),
+  idempotencyKey: z.string().trim().min(16).max(128)
+} as const;
+
+export const startBookingCommandSchema = z.object(bookingMutationIdentity).strict();
+export const completeBookingCommandSchema = z.object(bookingMutationIdentity).strict();
+export const bookingLineMutationCommandSchema = z
+  .object({
+    ...bookingMutationIdentity,
+    lineOrder: safeInteger(0, 99)
+  })
+  .strict();
+
+export const bookingLineSkipReasonSchema = z.enum([
+  "guest_declined",
+  "service_unavailable",
+  "staff_decision",
+  "safety_concern",
+  "other"
+]);
+export const skipBookingLineCommandSchema = z
+  .object({
+    ...bookingMutationIdentity,
+    lineOrder: safeInteger(0, 99),
+    reasonCode: bookingLineSkipReasonSchema,
+    note: z.string().trim().min(1).max(500).optional()
+  })
+  .strict();
+
+export const bookingNoShowReasonSchema = z.enum(["guest_absent", "unable_to_contact"]);
+export const markBookingNoShowCommandSchema = z
+  .object({
+    ...bookingMutationIdentity,
+    reasonCode: bookingNoShowReasonSchema,
+    note: z.string().trim().min(1).max(500).optional()
+  })
+  .strict();
+
+export const bookingCancellationReasonSchema = z.enum([
+  "guest_request",
+  "staff_unavailable",
+  "business_disruption",
+  "duplicate",
+  "other"
+]);
+export const cancelBookingCommandSchema = z
+  .object({
+    ...bookingMutationIdentity,
+    reasonCode: bookingCancellationReasonSchema,
+    note: z.string().trim().min(1).max(500).optional()
+  })
+  .strict();
+
+export const bookingListQuerySchema = z
+  .object({
+    status: bookingStatusSchema.optional(),
+    locationId: objectIdSchema.optional(),
+    localDateFrom: localDateSchema.optional(),
+    localDateTo: localDateSchema.optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(100)
+  })
+  .strict()
+  .refine(
+    ({ localDateFrom, localDateTo }) =>
+      localDateFrom === undefined || localDateTo === undefined || localDateFrom <= localDateTo,
+    { message: "localDateFrom cannot be after localDateTo" }
+  );
+
+export const bookingListResultSchema = z
+  .object({ bookings: z.array(bookingDtoSchema).max(200) })
+  .strict();
+
+export const serviceDtoSchema = z
+  .object({
+    id: objectIdSchema,
+    name: boundedText(120),
+    description: boundedText(500).nullable()
+  })
+  .strict();
+
+export const bookingCatalogueStaffSchema = z
+  .object({ id: objectIdSchema, displayName: boundedText(120) })
+  .strict();
+export const bookingCatalogueOfferingSchema = z
+  .object({
+    durationMinutes: safeInteger(1, 1_440),
+    bufferBeforeMinutes: safeInteger(0, 240),
+    bufferAfterMinutes: safeInteger(0, 240),
+    quotedPriceMinor: moneyMinorSchema,
+    slotIncrementMinutes: safeInteger(1, 240),
+    minAdvanceMinutes: safeInteger(0, 525_600),
+    maxAdvanceDays: safeInteger(0, 730)
+  })
+  .strict();
+export const bookingCatalogueServiceSchema = serviceDtoSchema
+  .extend({
+    offering: bookingCatalogueOfferingSchema,
+    eligibleStaff: z.array(bookingCatalogueStaffSchema).max(500)
+  })
+  .strict();
+export const bookingCatalogueResultSchema = z
+  .object({
+    locationId: objectIdSchema,
+    services: z.array(bookingCatalogueServiceSchema).max(500)
+  })
+  .strict();
+
+export const bookingLocationDtoSchema = z
+  .object({
+    id: objectIdSchema,
+    name: boundedText(120),
+    timezone: boundedText(64)
+  })
+  .strict();
+export const bookingLocationListResultSchema = z
+  .object({ locations: z.array(bookingLocationDtoSchema).max(500) })
+  .strict();
+
 export type BookingStatus = z.infer<typeof bookingStatusSchema>;
+export type BookingLocationDto = z.infer<typeof bookingLocationDtoSchema>;
+export type BookingLocationListResult = z.infer<typeof bookingLocationListResultSchema>;
 export type BookingLineStatus = z.infer<typeof bookingLineStatusSchema>;
 export type ScheduleOwnerType = z.infer<typeof scheduleOwnerTypeSchema>;
 export type StaffScheduleMode = z.infer<typeof staffScheduleModeSchema>;
@@ -396,4 +517,15 @@ export type CreateBookingCommand = z.input<typeof createBookingCommandSchema>;
 export type ConfirmBookingCommand = z.input<typeof confirmBookingCommandSchema>;
 export type RescheduleBookingCommand = z.input<typeof rescheduleBookingCommandSchema>;
 export type BookingCommandResult = z.infer<typeof bookingCommandResultSchema>;
+export type BookingDto = z.infer<typeof bookingDtoSchema>;
 export type BookingRescheduleReason = z.infer<typeof bookingRescheduleReasonSchema>;
+export type StartBookingCommand = z.input<typeof startBookingCommandSchema>;
+export type CompleteBookingCommand = z.input<typeof completeBookingCommandSchema>;
+export type BookingLineMutationCommand = z.input<typeof bookingLineMutationCommandSchema>;
+export type SkipBookingLineCommand = z.input<typeof skipBookingLineCommandSchema>;
+export type MarkBookingNoShowCommand = z.input<typeof markBookingNoShowCommandSchema>;
+export type CancelBookingCommand = z.input<typeof cancelBookingCommandSchema>;
+export type BookingListQuery = z.input<typeof bookingListQuerySchema>;
+export type BookingListResult = z.infer<typeof bookingListResultSchema>;
+export type BookingCatalogueResult = z.infer<typeof bookingCatalogueResultSchema>;
+export type ServiceDto = z.infer<typeof serviceDtoSchema>;

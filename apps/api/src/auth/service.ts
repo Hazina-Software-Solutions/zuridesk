@@ -25,7 +25,8 @@ import {
   rotateSession,
   selectActiveTenant,
   verifyLiveTenantAccess,
-  type DatabaseCommandErrorCode
+  type DatabaseCommandErrorCode,
+  type TrustedTenantContext
 } from "@zuridesk/db";
 import {
   hasPermission,
@@ -154,6 +155,45 @@ export class AuthService {
       throw new AuthServiceError("FORBIDDEN", 403);
     }
     return live.roleKeys;
+  }
+
+  async authorizeTenantContext(
+    principal: { userId: string; sessionId: string; tenantId: string | null },
+    permission: Permission,
+    requestId: string
+  ): Promise<TrustedTenantContext> {
+    if (principal.tenantId === null) throw new AuthServiceError("FORBIDDEN", 403);
+    const live = await verifyLiveTenantAccess({
+      sessionId: principal.sessionId,
+      userId: principal.userId,
+      tenantId: principal.tenantId,
+      requestId
+    });
+    if (live === null || !hasPermission(live.roleKeys, permission)) {
+      throw new AuthServiceError("FORBIDDEN", 403);
+    }
+    return live.context;
+  }
+
+  async authorizeTenantContextAny(
+    principal: { userId: string; sessionId: string; tenantId: string | null },
+    permissions: readonly Permission[],
+    requestId: string
+  ): Promise<TrustedTenantContext> {
+    if (principal.tenantId === null) throw new AuthServiceError("FORBIDDEN", 403);
+    const live = await verifyLiveTenantAccess({
+      sessionId: principal.sessionId,
+      userId: principal.userId,
+      tenantId: principal.tenantId,
+      requestId
+    });
+    if (
+      live === null ||
+      !permissions.some((permission) => hasPermission(live.roleKeys, permission))
+    ) {
+      throw new AuthServiceError("FORBIDDEN", 403);
+    }
+    return live.context;
   }
 
   async completeOwnerSignup(input: {

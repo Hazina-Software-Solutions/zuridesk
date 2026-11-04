@@ -7,7 +7,10 @@ export const RESOURCES = [
   "membership",
   "invite",
   "profile",
-  "session"
+  "session",
+  "service",
+  "availability",
+  "booking"
 ] as const;
 export type Resource = (typeof RESOURCES)[number];
 
@@ -24,6 +27,9 @@ export const ROLE_PERMISSIONS = {
     ...all("location", ["read", "create", "update", "suspend"]),
     ...all("membership", ["read", "create", "update", "suspend", "revoke"]),
     ...all("invite", ["read", "create", "revoke"]),
+    ...all("service", ["read", "create", "update", "suspend"]),
+    "availability:read",
+    ...all("booking", ["read", "create", "update"]),
     "profile:self",
     "session:self"
   ],
@@ -32,11 +38,33 @@ export const ROLE_PERMISSIONS = {
     ...all("location", ["read", "create", "update", "suspend"]),
     ...all("membership", ["read", "create", "update", "suspend", "revoke"]),
     ...all("invite", ["read", "create", "revoke"]),
+    ...all("service", ["read", "create", "update", "suspend"]),
+    "availability:read",
+    ...all("booking", ["read", "create", "update"]),
     "profile:self",
     "session:self"
   ],
-  receptionist: ["tenant:read", "location:read", "membership:self", "profile:self", "session:self"],
-  stylist: ["tenant:read", "location:read", "membership:self", "profile:self", "session:self"]
+  receptionist: [
+    "tenant:read",
+    "location:read",
+    "membership:self",
+    "service:read",
+    "availability:read",
+    "booking:read",
+    "booking:create",
+    "booking:update",
+    "profile:self",
+    "session:self"
+  ],
+  stylist: [
+    "tenant:read",
+    "location:read",
+    "membership:self",
+    "service:read",
+    "booking:self",
+    "profile:self",
+    "session:self"
+  ]
 } as const satisfies Readonly<Record<RoleKey, readonly Permission[]>>;
 
 export const MANAGER_ASSIGNABLE_ROLES = ["receptionist", "stylist"] as const;

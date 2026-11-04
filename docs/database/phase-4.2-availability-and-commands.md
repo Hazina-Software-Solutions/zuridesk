@@ -34,7 +34,7 @@ The engine:
 `@js-temporal/polyfill` is pinned for timezone conversion. A nonexistent wall
 time in a daylight-saving gap is rejected. A repeated wall time uses the
 earlier occurrence consistently. Nairobi and DST gap/fold conversion behavior
-has direct pure-function tests; command-level DST acceptance remains pending.
+has both direct pure-function and command-level acceptance coverage.
 
 ## Authoritative commands
 
@@ -113,8 +113,9 @@ unions and timezone refresh; and winning-plan evidence.
 
 Custom staff schedules, explicit unconfigured/closed/effective-version command
 cases, advance-window rejection, `in_progress` blocking, and command-level DST
-dates are implemented paths but do not yet have direct end-to-end command tests.
-They remain acceptance-test work before Phase 4.3 exposes public routes.
+dates now have direct end-to-end command tests in Phase 4.3.
 
-Shared migration execution, deployment, Phase 4.3 HTTP exposure, and Phase 4.4
-offline/UI work remain separate approval gates.
+Shared migration execution, deployment, and Phase 4.4 offline/UI work remain
+separate approval gates. See
+[Phase 4.3 booking API and lifecycle](phase-4.3-booking-api-and-lifecycle.md)
+for the public routes and completed lifecycle.

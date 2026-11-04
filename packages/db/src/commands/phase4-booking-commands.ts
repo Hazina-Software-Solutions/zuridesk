@@ -3,18 +3,30 @@ import { createHash } from "node:crypto";
 import {
   availabilityQuerySchema,
   availabilityResultSchema,
+  bookingLineMutationCommandSchema,
   bookingCommandResultSchema,
+  cancelBookingCommandSchema,
+  completeBookingCommandSchema,
   confirmBookingCommandSchema,
   createBookingCommandSchema,
+  markBookingNoShowCommandSchema,
   objectIdSchema,
   rescheduleBookingCommandSchema,
+  skipBookingLineCommandSchema,
+  startBookingCommandSchema,
   type AvailabilityQuery,
   type AvailabilityResult,
   type AvailabilitySlot,
   type BookingCommandResult,
   type BookingSelection,
+  type BookingLineMutationCommand,
+  type CancelBookingCommand,
+  type CompleteBookingCommand,
   type ConfirmBookingCommand,
   type CreateBookingCommand,
+  type MarkBookingNoShowCommand,
+  type SkipBookingLineCommand,
+  type StartBookingCommand,
   type RescheduleBookingCommand
 } from "@zuridesk/shared";
 import type { ClientSession, HydratedDocument, Types } from "mongoose";
@@ -464,6 +476,325 @@ export async function rescheduleBooking(
         capturedNow,
         session
       );
+      await completeReceipt(tenantId, claim.receiptId, bookingId, capturedNow, session);
+      return bookingResultFromId(tenantId, bookingId, false, session);
+    } catch (error) {
+      if (error instanceof DatabaseCommandError) {
+        await conflictReceipt(tenantId, claim.receiptId, capturedNow, session);
+        return error;
+      }
+      throw error;
+    }
+  });
+  if (outcome instanceof DatabaseCommandError) throw outcome;
+  return outcome;
+}
+
+export async function startBooking(
+  context: TrustedTenantContext,
+  input: StartBookingCommand,
+  options: InternalOptions = {}
+): Promise<BookingCommandResult> {
+  const parsed = startBookingCommandSchema.parse(input);
+  return mutateBookingLifecycle(context, parsed, "startBooking", options, {
+    authorization: "first_line",
+    transition(booking) {
+      if (booking.status !== "confirmed") throw new DatabaseCommandError("CONFLICT");
+      const firstLine = booking.lines[0];
+      if (firstLine === undefined || firstLine.status !== "scheduled") {
+        throw new DatabaseCommandError("CONFLICT");
+      }
+      return {
+        patch: {
+          status: "in_progress",
+          lines: booking.lines.map((line, index) =>
+            bookingLinePatch(line, index === 0 ? { status: "in_progress" } : {})
+          ),
+          version: booking.version + 1
+        },
+        event: lifecycleEvent("started", booking.status, "in_progress")
+      };
+    }
+  });
+}
+
+export async function startBookingLine(
+  context: TrustedTenantContext,
+  input: BookingLineMutationCommand,
+  options: InternalOptions = {}
+): Promise<BookingCommandResult> {
+  const parsed = bookingLineMutationCommandSchema.parse(input);
+  return mutateBookingLifecycle(context, parsed, "startBookingLine", options, {
+    authorization: "line",
+    lineOrder: parsed.lineOrder,
+    transition(booking) {
+      const line = requireOrderedLine(booking, parsed.lineOrder);
+      if (
+        booking.status !== "in_progress" ||
+        line.status !== "scheduled" ||
+        booking.lines.some((candidate) => candidate.status === "in_progress") ||
+        booking.lines
+          .slice(0, parsed.lineOrder)
+          .some((candidate) => candidate.status !== "completed" && candidate.status !== "skipped")
+      ) {
+        throw new DatabaseCommandError("CONFLICT");
+      }
+      return {
+        patch: {
+          lines: booking.lines.map((candidate, index) =>
+            bookingLinePatch(candidate, index === parsed.lineOrder ? { status: "in_progress" } : {})
+          ),
+          version: booking.version + 1
+        },
+        event: lifecycleEvent("line_started", null, null, parsed.lineOrder)
+      };
+    }
+  });
+}
+
+export async function completeBookingLine(
+  context: TrustedTenantContext,
+  input: BookingLineMutationCommand,
+  options: InternalOptions = {}
+): Promise<BookingCommandResult> {
+  const parsed = bookingLineMutationCommandSchema.parse(input);
+  return mutateBookingLifecycle(context, parsed, "completeBookingLine", options, {
+    authorization: "line",
+    lineOrder: parsed.lineOrder,
+    transition(booking) {
+      const line = requireOrderedLine(booking, parsed.lineOrder);
+      if (booking.status !== "in_progress" || line.status !== "in_progress") {
+        throw new DatabaseCommandError("CONFLICT");
+      }
+      return {
+        patch: {
+          lines: booking.lines.map((candidate, index) =>
+            bookingLinePatch(candidate, index === parsed.lineOrder ? { status: "completed" } : {})
+          ),
+          version: booking.version + 1
+        },
+        event: lifecycleEvent("line_completed", null, null, parsed.lineOrder)
+      };
+    }
+  });
+}
+
+export async function skipBookingLine(
+  context: TrustedTenantContext,
+  input: SkipBookingLineCommand,
+  options: InternalOptions = {}
+): Promise<BookingCommandResult> {
+  const parsed = skipBookingLineCommandSchema.parse(input);
+  return mutateBookingLifecycle(context, parsed, "skipBookingLine", options, {
+    authorization: "line",
+    lineOrder: parsed.lineOrder,
+    transition(booking) {
+      const line = requireOrderedLine(booking, parsed.lineOrder);
+      const previousAreTerminal = booking.lines
+        .slice(0, parsed.lineOrder)
+        .every((candidate) => candidate.status === "completed" || candidate.status === "skipped");
+      const anotherLineIsActive = booking.lines.some(
+        (candidate, index) => index !== parsed.lineOrder && candidate.status === "in_progress"
+      );
+      if (
+        booking.status !== "in_progress" ||
+        (line.status !== "scheduled" && line.status !== "in_progress") ||
+        !previousAreTerminal ||
+        anotherLineIsActive
+      ) {
+        throw new DatabaseCommandError("CONFLICT");
+      }
+      return {
+        patch: {
+          lines: booking.lines.map((candidate, index) =>
+            bookingLinePatch(
+              candidate,
+              index === parsed.lineOrder
+                ? { status: "skipped", skippedReasonCode: parsed.reasonCode }
+                : {}
+            )
+          ),
+          version: booking.version + 1
+        },
+        event: lifecycleEvent(
+          "line_skipped",
+          null,
+          null,
+          parsed.lineOrder,
+          parsed.reasonCode,
+          parsed.note ?? null
+        )
+      };
+    }
+  });
+}
+
+export async function completeBooking(
+  context: TrustedTenantContext,
+  input: CompleteBookingCommand,
+  options: InternalOptions = {}
+): Promise<BookingCommandResult> {
+  const parsed = completeBookingCommandSchema.parse(input);
+  return mutateBookingLifecycle(context, parsed, "completeBooking", options, {
+    authorization: "operations",
+    transition(booking) {
+      if (
+        booking.status !== "in_progress" ||
+        !booking.lines.every((line) => line.status === "completed" || line.status === "skipped")
+      ) {
+        throw new DatabaseCommandError("CONFLICT");
+      }
+      return {
+        patch: { status: "completed", version: booking.version + 1 },
+        event: lifecycleEvent("completed", booking.status, "completed")
+      };
+    }
+  });
+}
+
+export async function markBookingNoShow(
+  context: TrustedTenantContext,
+  input: MarkBookingNoShowCommand,
+  options: InternalOptions = {}
+): Promise<BookingCommandResult> {
+  const parsed = markBookingNoShowCommandSchema.parse(input);
+  return mutateBookingLifecycle(context, parsed, "markBookingNoShow", options, {
+    authorization: "operations",
+    transition(booking) {
+      if (booking.status !== "confirmed") throw new DatabaseCommandError("CONFLICT");
+      return {
+        patch: { status: "no_show", version: booking.version + 1 },
+        event: lifecycleEvent(
+          "no_show",
+          booking.status,
+          "no_show",
+          null,
+          parsed.reasonCode,
+          parsed.note ?? null
+        )
+      };
+    }
+  });
+}
+
+export async function cancelBooking(
+  context: TrustedTenantContext,
+  input: CancelBookingCommand,
+  options: InternalOptions = {}
+): Promise<BookingCommandResult> {
+  const parsed = cancelBookingCommandSchema.parse(input);
+  return mutateBookingLifecycle(context, parsed, "cancelBooking", options, {
+    authorization: "operations",
+    transition(booking) {
+      if (booking.status !== "pending" && booking.status !== "confirmed") {
+        throw new DatabaseCommandError("CONFLICT");
+      }
+      return {
+        patch: { status: "cancelled", version: booking.version + 1 },
+        event: lifecycleEvent(
+          "cancelled",
+          booking.status,
+          "cancelled",
+          null,
+          parsed.reasonCode,
+          parsed.note ?? null
+        )
+      };
+    }
+  });
+}
+
+type LifecycleEventType =
+  | "started"
+  | "line_started"
+  | "line_completed"
+  | "line_skipped"
+  | "completed"
+  | "no_show"
+  | "cancelled";
+
+interface LifecycleEvent {
+  readonly eventType: LifecycleEventType;
+  readonly fromStatus: BookingDocument["status"] | null;
+  readonly toStatus: BookingDocument["status"] | null;
+  readonly lineOrder: number | null;
+  readonly reasonCode: string | null;
+  readonly note: string | null;
+}
+
+interface LifecycleTransition {
+  readonly patch: Partial<BookingDocument> & { readonly version: number };
+  readonly event: LifecycleEvent;
+}
+
+interface LifecycleMutationSpec {
+  readonly authorization: "operations" | "first_line" | "line";
+  readonly lineOrder?: number;
+  transition(booking: BookingHydrated): LifecycleTransition;
+}
+
+async function mutateBookingLifecycle(
+  context: TrustedTenantContext,
+  parsed: { bookingId: string; expectedVersion: number; idempotencyKey: string },
+  operation: string,
+  options: InternalOptions,
+  spec: LifecycleMutationSpec
+): Promise<BookingCommandResult> {
+  assertTrustedTenantContext(context);
+  const capturedNow = now(options);
+  const tenantId = toObjectId(context.tenantId, "tenantId");
+  const actorUserId = toObjectId(context.userId, "userId");
+  const bookingId = toObjectId(parsed.bookingId, "bookingId");
+  const preview = await BookingModel.findOne({ _id: bookingId, tenantId, deletedAt: null });
+  if (preview === null) throw new DatabaseCommandError("NOT_FOUND");
+  await authorizeLifecycleOperation(
+    tenantId,
+    actorUserId,
+    preview,
+    spec.authorization,
+    spec.lineOrder ?? null,
+    null
+  );
+  const requestHash = hashRequest(operation, parsed);
+  const replay = await readCompletedReplay(
+    tenantId,
+    actorUserId,
+    operation,
+    parsed.idempotencyKey,
+    requestHash
+  );
+  if (replay !== null) return replay;
+
+  const outcome = await runTransaction(async (session) => {
+    const booking = await BookingModel.findOne({
+      _id: bookingId,
+      tenantId,
+      deletedAt: null
+    }).session(session);
+    if (booking === null) throw new DatabaseCommandError("NOT_FOUND");
+    await authorizeLifecycleOperation(
+      tenantId,
+      actorUserId,
+      booking,
+      spec.authorization,
+      spec.lineOrder ?? null,
+      session
+    );
+    const claim = await claimReceipt(
+      tenantId,
+      actorUserId,
+      operation,
+      parsed.idempotencyKey,
+      requestHash,
+      parsed.expectedVersion,
+      capturedNow,
+      session
+    );
+    if (claim.replay) return bookingResultFromId(tenantId, claim.bookingId, true, session);
+    try {
+      if (booking.version !== parsed.expectedVersion) throw new DatabaseCommandError("CONFLICT");
+      const transition = spec.transition(booking);
+      await persistLifecycleUpdate(booking, transition, actorUserId, capturedNow, session);
       await completeReceipt(tenantId, claim.receiptId, bookingId, capturedNow, session);
       return bookingResultFromId(tenantId, bookingId, false, session);
     } catch (error) {
@@ -1134,18 +1465,54 @@ async function persistBookingUpdate(
   );
 }
 
+async function persistLifecycleUpdate(
+  booking: BookingHydrated,
+  transition: LifecycleTransition,
+  actorUserId: Types.ObjectId,
+  occurredAt: Date,
+  session: ClientSession
+): Promise<void> {
+  const candidate = BookingModel.hydrate({
+    ...booking.toObject(),
+    ...transition.patch,
+    updatedAt: occurredAt
+  });
+  await candidate.validate();
+  const result = await BookingModel.collection.updateOne(
+    { _id: booking._id, tenantId: booking.tenantId, version: booking.version, deletedAt: null },
+    { $set: { ...transition.patch, updatedAt: occurredAt } },
+    { session }
+  );
+  if (result.modifiedCount !== 1) throw new DatabaseCommandError("CONFLICT");
+  await appendEvent(
+    booking.tenantId,
+    booking._id,
+    actorUserId,
+    transition.patch.version,
+    transition.event.eventType,
+    transition.event.fromStatus,
+    transition.event.toStatus,
+    transition.event.reasonCode,
+    transition.event.note,
+    occurredAt,
+    session,
+    transition.event.lineOrder
+  );
+}
+
 async function appendEvent(
   tenantId: Types.ObjectId,
   bookingId: Types.ObjectId,
   actorUserId: Types.ObjectId,
   version: number,
-  eventType: "created" | "confirmed" | "rescheduled",
+  eventType: "created" | "confirmed" | "rescheduled" | LifecycleEventType,
   fromStatus: BookingDocument["status"] | null,
-  toStatus: BookingDocument["status"],
+  toStatus: BookingDocument["status"] | null,
   reasonCode: string | null,
   note: string | null,
   occurredAt: Date,
-  session: ClientSession
+  session: ClientSession,
+  lineOrder: number | null = null
 ): Promise<void> {
   const event = new BookingEventModel({
     schemaVersion: 1,
@@ -1159,7 +1526,7 @@ async function appendEvent(
     note,
     fromStatus,
     toStatus,
-    lineOrder: null,
+    lineOrder,
     bookingVersion: version,
     createdAt: occurredAt,
     updatedAt: occurredAt
@@ -1198,6 +1565,96 @@ async function authorizeBookingOperation(
     revokedAt: null
   }).session(session);
   if (grant === null) throw new DatabaseCommandError("FORBIDDEN");
+}
+
+async function authorizeLifecycleOperation(
+  tenantId: Types.ObjectId,
+  userId: Types.ObjectId,
+  booking: BookingHydrated,
+  authorization: "operations" | "first_line" | "line",
+  lineOrder: number | null,
+  session: ClientSession | null
+): Promise<void> {
+  const [membership, tenant] = await Promise.all([
+    MembershipModel.findOne({
+      tenantId,
+      userId,
+      status: "active",
+      deletedAt: null
+    }).session(session),
+    TenantModel.exists({ _id: tenantId, status: "active", deletedAt: null }).session(session)
+  ]);
+  if (membership === null || tenant === null) throw new DatabaseCommandError("FORBIDDEN");
+  if (membership.roleKeys.includes("owner")) return;
+  if (membership.roleKeys.some((role) => role === "manager" || role === "receptionist")) {
+    const grant = await LocationAccessGrantModel.exists({
+      tenantId,
+      targetMembershipId: membership._id,
+      locationId: booking.locationId,
+      status: "active",
+      revokedAt: null
+    }).session(session);
+    if (grant !== null) return;
+  }
+  if (authorization === "operations" || !membership.roleKeys.includes("stylist")) {
+    throw new DatabaseCommandError("FORBIDDEN");
+  }
+  const targetLine =
+    authorization === "first_line"
+      ? booking.lines[0]
+      : lineOrder === null
+        ? undefined
+        : booking.lines[lineOrder];
+  if (targetLine === undefined) throw new DatabaseCommandError("FORBIDDEN");
+  const profile = await StaffBookingProfileModel.exists({
+    _id: targetLine.assignedStaffProfileId,
+    tenantId,
+    membershipId: membership._id,
+    status: "active",
+    archivedAt: null
+  }).session(session);
+  if (profile === null) throw new DatabaseCommandError("FORBIDDEN");
+}
+
+function lifecycleEvent(
+  eventType: LifecycleEventType,
+  fromStatus: BookingDocument["status"] | null,
+  toStatus: BookingDocument["status"] | null,
+  lineOrder: number | null = null,
+  reasonCode: string | null = null,
+  note: string | null = null
+): LifecycleEvent {
+  return { eventType, fromStatus, toStatus, lineOrder, reasonCode, note };
+}
+
+function requireOrderedLine(booking: BookingHydrated, lineOrder: number) {
+  const line = booking.lines[lineOrder];
+  if (line === undefined || line.order !== lineOrder) throw new DatabaseCommandError("CONFLICT");
+  return line;
+}
+
+function bookingLinePatch(
+  line: BookingHydrated["lines"][number],
+  patch: {
+    readonly status?: "scheduled" | "in_progress" | "completed" | "skipped";
+    readonly skippedReasonCode?: string | null;
+  }
+) {
+  return {
+    order: line.order,
+    serviceId: line.serviceId,
+    serviceName: line.serviceName,
+    assignedStaffProfileId: line.assignedStaffProfileId,
+    durationMinutes: line.durationMinutes,
+    bufferBeforeMinutes: line.bufferBeforeMinutes,
+    bufferAfterMinutes: line.bufferAfterMinutes,
+    quotedPriceMinor: line.quotedPriceMinor,
+    startsAt: line.startsAt,
+    endsAt: line.endsAt,
+    status: patch.status ?? line.status,
+    skippedReasonCode:
+      patch.skippedReasonCode === undefined ? line.skippedReasonCode : patch.skippedReasonCode
+  };
 }
 
 async function readGuardVersions(

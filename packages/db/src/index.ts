@@ -8,11 +8,24 @@ export {
 export { type TrustedTenantContext } from "./context/tenant-context";
 export { DatabaseCommandError, type DatabaseCommandErrorCode } from "./commands/errors";
 export {
+  cancelBooking,
+  completeBooking,
+  completeBookingLine,
   confirmBooking,
   createBooking,
+  markBookingNoShow,
   queryBookingAvailability,
-  rescheduleBooking
+  rescheduleBooking,
+  skipBookingLine,
+  startBooking,
+  startBookingLine
 } from "./commands/phase4-booking-commands";
+export {
+  getBooking,
+  getBookingCatalogue,
+  listBookingLocations,
+  listBookings
+} from "./commands/phase4-booking-queries";
 export {
   acceptInvite,
   administerMembership,

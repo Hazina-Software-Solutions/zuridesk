@@ -14,6 +14,8 @@ import { healthRoutes } from "./routes/health";
 import type { AuthService } from "./auth/service";
 import { authRoutes } from "./routes/auth";
 import { tenancyRoutes } from "./routes/tenancy";
+import { bookingRoutes } from "./routes/bookings";
+import type { BookingApplicationService } from "./booking/service";
 
 export interface BuildAppOptions {
   allowedOrigins: readonly string[];
@@ -21,6 +23,7 @@ export interface BuildAppOptions {
   environment: "development" | "test" | "production";
   logger?: boolean | Record<string, unknown>;
   authService?: AuthService;
+  bookingService?: BookingApplicationService;
 }
 
 interface HttpError extends FastifyError {
@@ -90,8 +93,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     checkDatabase: options.checkDatabase
   });
 
-  if (options.authService === undefined && options.environment === "production") {
-    throw new Error("Authentication service configuration is required in production");
+  if (
+    (options.authService === undefined || options.bookingService === undefined) &&
+    options.environment === "production"
+  ) {
+    throw new Error("Authentication and booking service configuration is required in production");
   }
   const authService =
     options.authService ??
@@ -116,6 +122,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   await app.register(tenancyRoutes, {
     prefix: "/v1",
     auth: authService,
+    allowedOrigins: options.allowedOrigins
+  });
+  const bookingService =
+    options.bookingService ??
+    (new Proxy(
+      {},
+      {
+        get() {
+          return () => {
+            throw Object.assign(new Error("Booking service unavailable"), {
+              code: "BOOKING_SERVICE_UNAVAILABLE",
+              statusCode: 503
+            });
+          };
+        }
+      }
+    ) as BookingApplicationService);
+  await app.register(bookingRoutes, {
+    prefix: "/v1",
+    auth: authService,
+    booking: bookingService,
     allowedOrigins: options.allowedOrigins
   });
 

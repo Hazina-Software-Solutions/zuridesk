@@ -2,6 +2,7 @@ import { hasPermission, mayManageTargetRoles, type RoleKey } from "@zuridesk/sha
 import { Types, type ClientSession } from "mongoose";
 
 import { getInternalDatabaseConnection } from "../connection";
+import { createInternalTrustedTenantContext } from "../context/tenant-context";
 import {
   InviteModel,
   LocationModel,
@@ -641,6 +642,7 @@ export async function verifyLiveTenantAccess(input: {
   sessionId: string;
   userId: string;
   tenantId: string;
+  requestId?: string;
 }) {
   const [sessionDocument, membership, tenant, user] = await Promise.all([
     AuthSessionModel.exists({
@@ -662,7 +664,14 @@ export async function verifyLiveTenantAccess(input: {
   ]);
   return sessionDocument === null || membership === null || tenant === null || user === null
     ? null
-    : { roleKeys: membership.roleKeys };
+    : {
+        roleKeys: membership.roleKeys,
+        context: createInternalTrustedTenantContext({
+          tenantId: input.tenantId,
+          userId: input.userId,
+          requestId: input.requestId ?? input.sessionId
+        })
+      };
 }
 
 export async function consumeRateLimit(input: {

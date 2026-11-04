@@ -28,11 +28,24 @@ import { bootstrapTenantIdentity } from "../repositories/tenant-repository";
 import { userRepository } from "../repositories/user-repository";
 import { DatabaseCommandError } from "./errors";
 import {
+  cancelBooking,
+  completeBooking,
+  completeBookingLine,
   confirmBooking,
   createBooking,
+  markBookingNoShow,
   queryBookingAvailability,
-  rescheduleBooking
+  rescheduleBooking,
+  skipBookingLine,
+  startBooking,
+  startBookingLine
 } from "./phase4-booking-commands";
+import {
+  getBooking,
+  getBookingCatalogue,
+  listBookingLocations,
+  listBookings
+} from "./phase4-booking-queries";
 
 const uri = process.env.TEST_MONGODB_URI;
 const databaseName = `zuridesk_test_phase42_${randomUUID().replaceAll("-", "")}`;
@@ -46,6 +59,7 @@ const week = Array.from({ length: 7 }, (_, weekday) => ({
 describe.skipIf(uri === undefined)("Phase 4.2 availability and booking commands", () => {
   let context: TrustedTenantContext;
   let otherContext: TrustedTenantContext;
+  let stylistContext: TrustedTenantContext;
   let tenantId: string;
   let otherTenantId: string;
   let locationId: string;
@@ -101,6 +115,11 @@ describe.skipIf(uri === undefined)("Phase 4.2 availability and booking commands"
       userId: stylist.id,
       roleKeys: ["stylist"]
     });
+    stylistContext = (await verifyCandidateTenantMembership({
+      tenantId,
+      authenticatedUserId: stylist.id,
+      requestId: "phase43-stylist"
+    }))!;
     const profile = await staffBookingProfileRepository.create(context, {
       membershipId: membership.id,
       displayName: "Stylist"
@@ -233,6 +252,207 @@ describe.skipIf(uri === undefined)("Phase 4.2 availability and booking commands"
         locationId
       }
     );
+  });
+
+  it("fails closed for unconfigured and closed schedules and intersects custom staff hours", async () => {
+    await staffBookingProfileRepository.setScheduleMode(context, staffProfileId, "custom");
+    await bookingScheduleRepository.createWeeklyScheduleSuccessor(context, {
+      ownerType: "staff",
+      ownerId: staffProfileId,
+      timezone: "Africa/Nairobi",
+      effectiveFrom: "2026-11-01",
+      week: week.map(({ weekday }) => ({
+        weekday,
+        intervals: [{ startMinute: 600, endMinute: 720 }]
+      }))
+    });
+    const custom = await queryBookingAvailability(
+      context,
+      { locationId, localDate: "2026-11-10", selections: selection(), limit: 1 },
+      { clock }
+    );
+    expect(custom.slots[0]!.lines[0]!.startsAt.toISOString()).toBe("2026-11-10T07:15:00.000Z");
+
+    await staffBookingProfileRepository.setScheduleMode(context, staffProfileId, "unconfigured");
+    await expect(
+      queryBookingAvailability(
+        context,
+        { locationId, localDate: "2026-11-10", selections: selection() },
+        { clock }
+      )
+    ).resolves.toMatchObject({ slots: [], reasons: ["SCHEDULE_UNCONFIGURED"] });
+
+    await staffBookingProfileRepository.setScheduleMode(
+      context,
+      staffProfileId,
+      "inherit_location"
+    );
+    await bookingScheduleRepository.setDateOverride(context, {
+      ownerType: "location",
+      ownerId: locationId,
+      timezone: "Africa/Nairobi",
+      localDate: "2026-11-11",
+      intervals: []
+    });
+    await expect(
+      queryBookingAvailability(
+        context,
+        { locationId, localDate: "2026-11-11", selections: selection() },
+        { clock }
+      )
+    ).resolves.toMatchObject({ slots: [], reasons: ["LOCATION_UNAVAILABLE"] });
+  });
+
+  it("rejects the advance window and keeps in-progress work capacity-blocking", async () => {
+    await bookingConfigurationRepository.configureOffering(context, {
+      serviceId,
+      locationId,
+      durationMinutes: 60,
+      bufferBeforeMinutes: 15,
+      bufferAfterMinutes: 15,
+      quotedPriceMinor: 250000,
+      slotIncrementMinutes: 15,
+      minAdvanceMinutes: 120,
+      maxAdvanceDays: 30
+    });
+    await expect(
+      createBooking(
+        context,
+        {
+          idempotencyKey: "advance-window-denied",
+          locationId,
+          source: "appointment",
+          guest,
+          selections: selection(),
+          startsAt: new Date("2026-11-03T06:15:00.000Z")
+        },
+        { clock }
+      )
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    await bookingConfigurationRepository.configureOffering(context, {
+      serviceId,
+      locationId,
+      durationMinutes: 60,
+      bufferBeforeMinutes: 15,
+      bufferAfterMinutes: 15,
+      quotedPriceMinor: 250000,
+      slotIncrementMinutes: 15,
+      minAdvanceMinutes: 0,
+      maxAdvanceDays: 30
+    });
+    const created = await createBooking(
+      context,
+      {
+        idempotencyKey: "in-progress-block-01",
+        locationId,
+        source: "appointment",
+        guest,
+        selections: selection(),
+        startsAt: new Date("2026-11-21T06:15:00.000Z")
+      },
+      { clock }
+    );
+    await startBooking(
+      stylistContext,
+      {
+        bookingId: created.booking.id,
+        expectedVersion: 0,
+        idempotencyKey: "in-progress-start-01"
+      },
+      { clock }
+    );
+    const availability = await queryBookingAvailability(
+      context,
+      { locationId, localDate: "2026-11-21", selections: selection() },
+      { clock }
+    );
+    expect(
+      availability.slots.every(
+        (slot) =>
+          slot.lines[0]!.bufferedEndsAt <= created.booking.startsAt ||
+          slot.lines[0]!.bufferedStartsAt >= created.booking.endsAt
+      )
+    ).toBe(true);
+  });
+
+  it("handles DST folds deterministically and fails closed across nonexistent wall time", async () => {
+    const dstLocation = await locationRepository.create(context, {
+      id: newId(),
+      name: "New York DST salon",
+      timezone: "America/New_York"
+    });
+    await bookingConfigurationRepository.assignLocation(context, {
+      staffProfileId,
+      locationId: dstLocation.id
+    });
+    await bookingConfigurationRepository.configureOffering(context, {
+      serviceId,
+      locationId: dstLocation.id,
+      durationMinutes: 60,
+      bufferBeforeMinutes: 0,
+      bufferAfterMinutes: 0,
+      quotedPriceMinor: 250000,
+      slotIncrementMinutes: 15,
+      minAdvanceMinutes: 0,
+      maxAdvanceDays: 730
+    });
+    const dstWeek = Array.from({ length: 7 }, (_, weekday) => ({
+      weekday,
+      intervals: weekday === 0 ? [{ startMinute: 60, endMinute: 180 }] : []
+    }));
+    await bookingScheduleRepository.createWeeklyScheduleSuccessor(context, {
+      ownerType: "location",
+      ownerId: dstLocation.id,
+      timezone: "America/New_York",
+      effectiveFrom: "2026-01-01",
+      week: dstWeek
+    });
+
+    const fold = await queryBookingAvailability(
+      context,
+      {
+        locationId: dstLocation.id,
+        localDate: "2026-11-01",
+        selections: selection(),
+        limit: 1
+      },
+      { clock: () => new Date("2026-10-31T00:00:00.000Z") }
+    );
+    expect(fold.slots[0]!.startsAt.toISOString()).toBe("2026-11-01T05:00:00.000Z");
+    await expect(
+      createBooking(
+        context,
+        {
+          idempotencyKey: "dst-fold-booking-01",
+          locationId: dstLocation.id,
+          source: "appointment",
+          guest,
+          selections: selection(),
+          startsAt: new Date("2026-11-01T05:00:00.000Z")
+        },
+        { clock: () => new Date("2026-10-31T00:00:00.000Z") }
+      )
+    ).resolves.toMatchObject({ booking: { localDate: "2026-11-01" } });
+
+    await bookingScheduleRepository.setDateOverride(context, {
+      ownerType: "location",
+      ownerId: dstLocation.id,
+      timezone: "America/New_York",
+      localDate: "2026-03-08",
+      intervals: [{ startMinute: 120, endMinute: 180 }]
+    });
+    await expect(
+      queryBookingAvailability(
+        context,
+        {
+          locationId: dstLocation.id,
+          localDate: "2026-03-08",
+          selections: selection()
+        },
+        { clock: () => new Date("2026-03-01T00:00:00.000Z") }
+      )
+    ).resolves.toMatchObject({ slots: [], reasons: ["LOCATION_UNAVAILABLE"] });
   });
 
   it("rejects off-grid appointments and rounds later non-zero-second walk-in lines forward", async () => {
@@ -822,6 +1042,207 @@ describe.skipIf(uri === undefined)("Phase 4.2 availability and booking commands"
     }).distinct("utcDate");
     expect(lockedDates).toContain("2026-11-12");
     expect(lockedDates).toContain(winner.booking.lines[0]!.startsAt.toISOString().slice(0, 10));
+  });
+
+  it("executes the ordered lifecycle with idempotent versioned events", async () => {
+    const created = await createBooking(
+      context,
+      {
+        idempotencyKey: "lifecycle-create-01",
+        locationId,
+        source: "appointment",
+        status: "confirmed",
+        guest,
+        selections: [...selection(), ...selection()],
+        startsAt: new Date("2026-11-17T06:15:00.000Z")
+      },
+      { clock }
+    );
+    const startInput = {
+      bookingId: created.booking.id,
+      expectedVersion: 0,
+      idempotencyKey: "lifecycle-start-001"
+    };
+    const started = await startBooking(context, startInput, { clock });
+    expect(started.booking).toMatchObject({ status: "in_progress", version: 1 });
+    expect(started.booking.lines.map(({ status }) => status)).toEqual(["in_progress", "scheduled"]);
+    await expect(startBooking(context, startInput, { clock })).resolves.toMatchObject({
+      replay: true,
+      booking: { version: 1 }
+    });
+
+    const firstCompleted = await completeBookingLine(
+      stylistContext,
+      {
+        bookingId: created.booking.id,
+        lineOrder: 0,
+        expectedVersion: 1,
+        idempotencyKey: "lifecycle-line-done-1"
+      },
+      { clock }
+    );
+    expect(firstCompleted.booking.version).toBe(2);
+    const secondStarted = await startBookingLine(
+      stylistContext,
+      {
+        bookingId: created.booking.id,
+        lineOrder: 1,
+        expectedVersion: 2,
+        idempotencyKey: "lifecycle-line-start2"
+      },
+      { clock }
+    );
+    expect(secondStarted.booking.lines[1]!.status).toBe("in_progress");
+    const secondSkipped = await skipBookingLine(
+      stylistContext,
+      {
+        bookingId: created.booking.id,
+        lineOrder: 1,
+        expectedVersion: 3,
+        idempotencyKey: "lifecycle-line-skip-2",
+        reasonCode: "guest_declined",
+        note: "Guest changed the requested service"
+      },
+      { clock }
+    );
+    expect(secondSkipped.booking.lines[1]).toMatchObject({
+      status: "skipped",
+      skippedReasonCode: "guest_declined"
+    });
+    const completed = await completeBooking(
+      context,
+      {
+        bookingId: created.booking.id,
+        expectedVersion: 4,
+        idempotencyKey: "lifecycle-complete-1"
+      },
+      { clock }
+    );
+    expect(completed.booking).toMatchObject({ status: "completed", version: 5 });
+
+    expect(
+      await BookingEventModel.find({
+        tenantId: new Types.ObjectId(tenantId),
+        bookingId: new Types.ObjectId(created.booking.id)
+      })
+        .sort({ sequence: 1 })
+        .select({ _id: 0, sequence: 1, eventType: 1, lineOrder: 1, bookingVersion: 1 })
+        .lean()
+    ).toEqual([
+      { sequence: 0, eventType: "created", lineOrder: null, bookingVersion: 0 },
+      { sequence: 1, eventType: "started", lineOrder: null, bookingVersion: 1 },
+      { sequence: 2, eventType: "line_completed", lineOrder: 0, bookingVersion: 2 },
+      { sequence: 3, eventType: "line_started", lineOrder: 1, bookingVersion: 3 },
+      { sequence: 4, eventType: "line_skipped", lineOrder: 1, bookingVersion: 4 },
+      { sequence: 5, eventType: "completed", lineOrder: null, bookingVersion: 5 }
+    ]);
+  });
+
+  it("enforces terminal transition rules and operations-only cancellation", async () => {
+    const confirmed = await createBooking(
+      context,
+      {
+        idempotencyKey: "terminal-confirmed-1",
+        locationId,
+        source: "appointment",
+        guest,
+        selections: selection(),
+        startsAt: new Date("2026-11-18T06:15:00.000Z")
+      },
+      { clock }
+    );
+    await expect(
+      markBookingNoShow(
+        context,
+        {
+          bookingId: confirmed.booking.id,
+          expectedVersion: 0,
+          idempotencyKey: "terminal-no-show-01",
+          reasonCode: "guest_absent"
+        },
+        { clock }
+      )
+    ).resolves.toMatchObject({ booking: { status: "no_show", version: 1 } });
+
+    const pending = await createBooking(
+      context,
+      {
+        idempotencyKey: "terminal-pending-001",
+        locationId,
+        source: "appointment",
+        status: "pending",
+        guest,
+        selections: selection(),
+        startsAt: new Date("2026-11-19T06:15:00.000Z")
+      },
+      { clock }
+    );
+    const cancelInput = {
+      bookingId: pending.booking.id,
+      expectedVersion: 0,
+      idempotencyKey: "terminal-cancel-001",
+      reasonCode: "guest_request" as const
+    };
+    await expect(cancelBooking(stylistContext, cancelInput, { clock })).rejects.toMatchObject({
+      code: "FORBIDDEN"
+    });
+    await expect(cancelBooking(context, cancelInput, { clock })).resolves.toMatchObject({
+      booking: { status: "cancelled", version: 1 }
+    });
+    await expect(
+      completeBooking(
+        context,
+        {
+          bookingId: pending.booking.id,
+          expectedVersion: 1,
+          idempotencyKey: "terminal-invalid-done"
+        },
+        { clock }
+      )
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("row-filters booking reads and masks guest contact for assigned stylists", async () => {
+    const created = await createBooking(
+      context,
+      {
+        idempotencyKey: "read-scope-create-1",
+        locationId,
+        source: "appointment",
+        guest: {
+          kind: "named",
+          displayName: "Contact guest",
+          phone: "+254700000001",
+          email: "guest@example.com",
+          customerId: null
+        },
+        selections: selection(),
+        startsAt: new Date("2026-11-20T06:15:00.000Z")
+      },
+      { clock }
+    );
+    const stylistList = await listBookings(stylistContext, {});
+    expect(stylistList.bookings).toHaveLength(1);
+    expect(stylistList.bookings[0]!.guest).toEqual({
+      kind: "named",
+      displayName: "Contact guest",
+      customerId: null
+    });
+    expect((await getBooking(context, created.booking.id)).guest.phone).toBe("+254700000001");
+    await expect(getBooking(otherContext, created.booking.id)).rejects.toMatchObject({
+      code: "NOT_FOUND"
+    });
+    const catalogue = await getBookingCatalogue(stylistContext, locationId);
+    expect(catalogue.services[0]).toMatchObject({
+      id: serviceId,
+      eligibleStaff: [{ id: staffProfileId }]
+    });
+    await expect(listBookingLocations(stylistContext)).resolves.toEqual({
+      locations: [{ id: locationId, name: "Nairobi salon", timezone: "Africa/Nairobi" }]
+    });
+    expect((await listBookingLocations(otherContext)).locations.map(({ id }) => id)).toEqual([
+      otherLocationId
+    ]);
   });
 
   it("uses typed errors without leaking a forged tenant id", async () => {

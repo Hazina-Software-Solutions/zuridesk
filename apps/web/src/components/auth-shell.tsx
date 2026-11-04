@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createZuriDeskWebApiClient } from "@zuridesk/api-client";
 
 import { publicEnvironment } from "../config/public-env";
+import { BookingWorkspace } from "./booking-workspace";
 
 type Tenant = { id: string; name: string; roleKeys: string[] };
 type WebSession = {
@@ -222,35 +223,34 @@ export function AuthShell() {
 
   if (session !== null) {
     const active = session.tenants.find(({ id }) => id === session.activeTenantId);
+    if (active !== undefined) {
+      return (
+        <BookingWorkspace
+          businessName={active.name}
+          userName={session.user.displayName}
+          roleKeys={active.roleKeys}
+          onLogout={logout}
+        />
+      );
+    }
     return (
       <main className="auth-page">
         <section className="auth-card">
           <p className="eyebrow">ZuriDesk</p>
           <h1>Welcome, {session.user.displayName}</h1>
-          {active === undefined ? (
-            <div className="stack">
-              <p>Choose the business workspace you want to open.</p>
-              {session.tenants.map((tenant) => (
-                <button
-                  key={tenant.id}
-                  className="tenant-button"
-                  onClick={() => void selectTenant(tenant.id)}
-                >
-                  <span>{tenant.name}</span>
-                  <small>{tenant.roleKeys.join(" · ")}</small>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="workspace-shell">
-              <p className="eyebrow">Protected workspace</p>
-              <h2>{active.name}</h2>
-              <p>
-                Your authenticated ZuriDesk shell is ready. Operational modules arrive in the next
-                product phase.
-              </p>
-            </div>
-          )}
+          <div className="stack">
+            <p>Choose the business workspace you want to open.</p>
+            {session.tenants.map((tenant) => (
+              <button
+                key={tenant.id}
+                className="tenant-button"
+                onClick={() => void selectTenant(tenant.id)}
+              >
+                <span>{tenant.name}</span>
+                <small>{tenant.roleKeys.join(", ")}</small>
+              </button>
+            ))}
+          </div>
           <button className="text-button" onClick={() => void logout()}>
             Sign out
           </button>

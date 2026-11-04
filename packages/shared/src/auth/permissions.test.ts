@@ -14,7 +14,7 @@ import {
 
 const expected: Readonly<Record<RoleKey, readonly Permission[]>> = ROLE_PERMISSIONS;
 
-describe("Phase 3 permission matrix", () => {
+describe("permission matrix", () => {
   for (const role of ROLE_KEYS) {
     for (const resource of RESOURCES) {
       for (const action of ACTIONS) {
@@ -39,6 +39,14 @@ describe("Phase 3 permission matrix", () => {
       expect(hasPermission([role], "membership:read")).toBe(false);
     }
   );
+
+  it("keeps booking operations broad for front desk and row-scoped for stylists", () => {
+    expect(hasPermission(["receptionist"], "booking:create")).toBe(true);
+    expect(hasPermission(["receptionist"], "booking:update")).toBe(true);
+    expect(hasPermission(["stylist"], "booking:self")).toBe(true);
+    expect(hasPermission(["stylist"], "booking:read")).toBe(false);
+    expect(hasPermission(["stylist"], "availability:read")).toBe(false);
+  });
 
   it.each([
     [["manager"], ["receptionist"], true],

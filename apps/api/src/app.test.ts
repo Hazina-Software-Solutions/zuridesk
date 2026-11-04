@@ -72,6 +72,6 @@ describe("API foundation", () => {
         environment: "production",
         logger: false
       })
-    ).rejects.toThrow("Authentication service configuration is required in production");
+    ).rejects.toThrow("Authentication and booking service configuration is required in production");
   });
 });
